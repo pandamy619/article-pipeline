@@ -37,8 +37,8 @@ docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml up 
 **Прод (Windows + RTX 4080):** всё в Docker, Ollama с GPU.
 
 ```bash
-cp deploy/.env.example deploy/.env   # заполнить токены
-docker compose -f deploy/docker-compose.yml up -d
+cp deploy/.env.example deploy/.env   # заполнить токены и SEARXNG_SECRET
+docker compose -f deploy/docker-compose.yml --profile gpu up -d
 ```
 
 ## Лицензия
