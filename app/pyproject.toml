@@ -1,0 +1,32 @@
+[tool.poetry]
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.12"
+# Сбор источников
+feedparser = "*"
+trafilatura = "*"
+praw = "*"            # Reddit
+arxiv = "*"           # arXiv API
+telethon = "*"        # чтение чужих TG-каналов
+# Telegram-бот
+aiogram = "^3"
+# LLM / эмбеддинги
+httpx = "*"           # клиент к Ollama HTTP API
+# Хранилище
+SQLAlchemy = "*"
+alembic = "*"
+psycopg = { extras = ["binary"], version = "*" }
+redis = "*"           # клиент совместим с Valkey
+# Утилиты
+pydantic = "*"
+pydantic-settings = "*"
+APScheduler = "*"
+
+[tool.poetry.group.dev.dependencies]
+ruff = "*"
+pytest = "*"
+
+[build-system]
+requires = ["poetry-core>=2.0.0"]
+build-backend = "poetry.core.masonry.api"
