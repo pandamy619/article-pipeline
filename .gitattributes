@@ -1,0 +1,10 @@
+# Критично для разработки на Mac и деплоя на Windows:
+# принудительно LF во всём репозитории, иначе bash/Dockerfile падают на Windows из-за \r
+* text=auto eol=lf
+
+# Бинарные файлы не трогать
+*.png binary
+*.jpg binary
+*.gz  binary
+*.zip binary
+*.session binary
