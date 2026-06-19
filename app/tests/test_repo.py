@@ -1,22 +1,8 @@
 from datetime import datetime, timezone
 
-import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-
 from src.collectors.base import Article
-from src.db.models import ArticleRecord, ArticleStatus, Base
+from src.db.models import ArticleRecord, ArticleStatus
 from src.db.repo import save_articles
-
-
-@pytest.fixture()
-def session():
-    engine = create_engine("sqlite:///:memory:")
-    Base.metadata.create_all(engine)
-    factory = sessionmaker(bind=engine)
-    s = factory()
-    yield s
-    s.close()
 
 
 def _art(url, title="Заголовок", text="тело статьи"):

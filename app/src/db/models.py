@@ -5,7 +5,7 @@ from __future__ import annotations
 import enum
 from datetime import datetime, timezone
 
-from sqlalchemy import BigInteger, DateTime, Enum, String, Text
+from sqlalchemy import BigInteger, DateTime, Enum, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -43,6 +43,8 @@ class ArticleRecord(Base):
         default=ArticleStatus.new,
         index=True,
     )
+    relevance_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    relevance_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     post_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     tg_message_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
