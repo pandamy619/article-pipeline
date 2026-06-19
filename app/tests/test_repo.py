@@ -1,0 +1,66 @@
+from datetime import datetime, timezone
+
+import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+from src.collectors.base import Article
+from src.db.models import ArticleRecord, ArticleStatus, Base
+from src.db.repo import save_articles
+
+
+@pytest.fixture()
+def session():
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    factory = sessionmaker(bind=engine)
+    s = factory()
+    yield s
+    s.close()
+
+
+def _art(url, title="Заголовок", text="тело статьи"):
+    return Article(
+        title=title,
+        url=url,
+        text=text,
+        source="src",
+        published_at=datetime(2025, 6, 1, tzinfo=timezone.utc),
+    )
+
+
+def test_save_new(session):
+    res = save_articles(
+        session,
+        [_art("https://e.com/1"), _art("https://e.com/2", title="T2", text="b2")],
+    )
+    assert res.added == 2
+    assert res.duplicates == 0
+    assert session.query(ArticleRecord).count() == 2
+    assert session.query(ArticleRecord).first().status == ArticleStatus.new
+
+
+def test_dedup_by_url(session):
+    save_articles(session, [_art("https://e.com/1")])
+    res = save_articles(
+        session, [_art("https://e.com/1", title="другое", text="другое")]
+    )
+    assert res.added == 0
+    assert res.duplicates == 1
+    assert session.query(ArticleRecord).count() == 1
+
+
+def test_dedup_by_content_hash(session):
+    save_articles(session, [_art("https://e.com/1", title="Одно", text="То же тело")])
+    # другой URL, идентичный контент -> дубль по хешу
+    res = save_articles(
+        session, [_art("https://e.com/2", title="Одно", text="То же тело")]
+    )
+    assert res.added == 0
+    assert res.duplicates == 1
+
+
+def test_dedup_within_batch(session):
+    res = save_articles(session, [_art("https://e.com/1"), _art("https://e.com/1")])
+    assert res.added == 1
+    assert res.duplicates == 1
