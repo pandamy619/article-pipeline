@@ -1,4 +1,5 @@
 """Конфигурация приложения из переменных окружения (.env)."""
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -24,6 +25,13 @@ class Settings(BaseSettings):
 
     # Поведение
     relevance_threshold: int = 7
+
+    # Источники
+    rss_feeds: str = ""  # список URL через запятую
+
+    @property
+    def rss_feed_list(self) -> list[str]:
+        return [u.strip() for u in self.rss_feeds.split(",") if u.strip()]
 
 
 settings = Settings()
