@@ -30,7 +30,7 @@ docs/     — архитектура и описание стека
 ```bash
 brew install ollama && ollama serve
 ollama pull qwen3:4b && ollama pull bge-m3
-cp deploy/.env.example deploy/.env   # значения — см. docs/secrets.md
+cp deploy/.env.example deploy/.env   # заполни ключи (см. комментарии в .env.example)
 docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml up postgres valkey searxng app
 ```
 

@@ -1,7 +1,10 @@
 # --- Секреты (НИКОГДА не коммитить) ---
 .env
-*.session            # Telethon: это полный доступ к аккаунту!
+# Telethon .session = полный доступ к аккаунту
+*.session
 sessions/
+# личная инструкция по секретам, держим вне репозитория
+docs/secrets.md
 
 # --- Python ---
 __pycache__/
@@ -23,7 +26,9 @@ logs/
 *.log
 
 # --- ОС / редакторы ---
-.DS_Store          # macOS
-Thumbs.db          # Windows
+# macOS
+.DS_Store
+# Windows
+Thumbs.db
 .idea/
 .vscode/
