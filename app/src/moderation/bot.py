@@ -1,0 +1,118 @@
+"""Telegram-бот модерации (aiogram 3): черновики -> кнопки -> публикация."""
+
+from __future__ import annotations
+
+import asyncio
+
+from aiogram import Bot, Dispatcher, F, Router
+from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.types import CallbackQuery, Message
+
+from src.config import settings
+from src.db.base import get_session
+from src.moderation import service
+from src.moderation.keyboards import review_keyboard
+
+router = Router()
+
+
+class EditState(StatesGroup):
+    waiting_text = State()
+
+
+def _admin_id() -> int:
+    return int(settings.admin_user_id)
+
+
+def _group_id() -> int:
+    return int(settings.telegram_group_id)
+
+
+async def send_drafts(bot: Bot) -> int:
+    """Шлёт админу все черновики с кнопками, помечает их pending."""
+    sent = 0
+    with get_session() as session:
+        for rec in service.get_drafts(session):
+            await bot.send_message(
+                _admin_id(),
+                rec.post_text or "(пустой пост)",
+                reply_markup=review_keyboard(rec.id),
+            )
+            service.mark_pending(session, rec.id)
+            sent += 1
+    return sent
+
+
+@router.message(Command("review"))
+async def cmd_review(message: Message, bot: Bot) -> None:
+    if message.from_user and message.from_user.id != _admin_id():
+        return
+    n = await send_drafts(bot)
+    await message.answer(f"На модерацию отправлено: {n}")
+
+
+@router.callback_query(F.data.startswith(f"{service.CALLBACK_PREFIX}:"))
+async def on_action(query: CallbackQuery, bot: Bot, state: FSMContext) -> None:
+    parsed = service.parse_callback(query.data or "")
+    if not parsed:
+        await query.answer("Неизвестное действие")
+        return
+    action, article_id = parsed
+
+    if action == "reject":
+        with get_session() as session:
+            service.reject(session, article_id)
+        if isinstance(query.message, Message):
+            await query.message.edit_reply_markup(reply_markup=None)
+        await query.answer("Отклонено ❌")
+
+    elif action == "edit":
+        await state.set_state(EditState.waiting_text)
+        await state.update_data(article_id=article_id)
+        if isinstance(query.message, Message):
+            await query.message.answer(
+                "Пришли исправленный текст поста одним сообщением."
+            )
+        await query.answer()
+
+    elif action == "approve":
+        with get_session() as session:
+            post = service.get_post_text(session, article_id)
+        if not post:
+            await query.answer("Пост пуст")
+            return
+        msg = await bot.send_message(_group_id(), post)
+        with get_session() as session:
+            service.mark_published(session, article_id, msg.message_id)
+        if isinstance(query.message, Message):
+            await query.message.edit_reply_markup(reply_markup=None)
+        await query.answer("Опубликовано ✅")
+
+
+@router.message(EditState.waiting_text)
+async def on_edit_text(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    article_id = int(data["article_id"])
+    await state.clear()
+    new_text = message.text or ""
+    with get_session() as session:
+        service.set_post_text(session, article_id, new_text)
+    # по выбору пользователя: после правки — снова показываем кнопки
+    await message.answer(new_text, reply_markup=review_keyboard(article_id))
+
+
+def build_dispatcher() -> Dispatcher:
+    dp = Dispatcher()
+    dp.include_router(router)
+    return dp
+
+
+async def run() -> None:
+    bot = Bot(settings.telegram_bot_token)
+    await build_dispatcher().start_polling(bot)
+
+
+if __name__ == "__main__":
+    asyncio.run(run())
