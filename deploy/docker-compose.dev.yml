@@ -1,0 +1,20 @@
+# Оверрайд для разработки на Mac (Apple Silicon, без NVIDIA GPU).
+# Ollama запускается НАТИВНО на macOS (использует GPU через Metal), а контейнер app ходит к ней на хост.
+#
+# Запуск на Mac (НЕ поднимаем контейнер ollama):
+#   docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml up postgres valkey searxng app
+#
+# Перед этим один раз на Mac:  brew install ollama && ollama serve && ollama pull qwen3:4b && ollama pull bge-m3
+
+services:
+  app:
+    environment:
+      - OLLAMA_HOST=http://host.docker.internal:11434   # нативная Ollama на macOS-хосте
+      - LLM_MODEL=qwen3:4b                              # меньшая модель для дева (быстрее на Mac)
+      - EMBED_MODEL=bge-m3
+      - ENV=dev
+    extra_hosts:
+      - "host.docker.internal:host-gateway"            # чтобы контейнер видел хост (нужно вне Docker Desktop)
+    volumes:
+      - ../app:/app                                    # код с хоста для hot-reload
+    # command: можно переопределить на запуск с авто-перезагрузкой (watchfiles), когда появится код

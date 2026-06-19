@@ -1,0 +1,81 @@
+# Прод-конфиг (Windows + GPU). Запуск:  docker compose up -d
+# Для разработки на Mac используйте оверрайд docker-compose.dev.yml (см. docs/repo-architecture.md).
+# Проверка GPU: docker run --rm --gpus all nvidia/cuda:12.4.0-base-ubuntu22.04 nvidia-smi
+
+services:
+  # Локальный LLM-движок с доступом к RTX 4080
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports: ["11434:11434"]
+    volumes: [ollama:/root/.ollama]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+
+  # Разовая загрузка моделей при первом запуске
+  ollama-pull:
+    image: ollama/ollama:latest
+    depends_on: [ollama]
+    environment: ["OLLAMA_HOST=ollama:11434"]
+    entrypoint: ["sh", "-c", "sleep 5 && ollama pull qwen3:14b && ollama pull bge-m3"]
+    restart: "no"
+
+  postgres:
+    image: postgres:16
+    container_name: postgres
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    volumes: [pgdata:/var/lib/postgresql/data]
+    restart: unless-stopped
+
+  valkey:
+    image: valkey/valkey:8        # открытый (BSD) форк Redis, протокол-совместим
+    container_name: valkey
+    restart: unless-stopped
+
+  searxng:
+    image: searxng/searxng:latest
+    container_name: searxng
+    ports: ["8080:8080"]
+    volumes: ["./searxng:/etc/searxng"]
+    restart: unless-stopped
+
+  # Основной сервис: сборщик + фильтр + рерайт + бот (aiogram)
+  app:
+    build: ../app
+    container_name: app
+    depends_on: [ollama, postgres, valkey, searxng]
+    env_file: .env
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+      - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - REDIS_URL=redis://valkey:6379/0
+      - SEARXNG_URL=http://searxng:8080
+      - LLM_MODEL=qwen3:14b
+      - EMBED_MODEL=bge-m3
+    volumes:
+      - ../app:/app
+      - ../sessions:/app/sessions   # .session Telethon
+    restart: unless-stopped
+
+  # Опционально: оркестрация (docker compose --profile orchestration up -d)
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: n8n
+    profiles: ["orchestration"]
+    ports: ["5678:5678"]
+    volumes: [n8ndata:/home/node/.n8n]
+    restart: unless-stopped
+
+volumes:
+  ollama:
+  pgdata:
+  n8ndata:

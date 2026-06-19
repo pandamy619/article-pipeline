@@ -1,0 +1,11 @@
+# Минимальная конфигурация SearXNG для пайплайна.
+use_default_settings: true
+
+server:
+  secret_key: "CHANGE_ME"        # ОБЯЗАТЕЛЬНО замените на случайную строку
+  limiter: false
+
+search:
+  formats:
+    - html
+    - json                       # нужно, чтобы пайплайн получал результаты в JSON
