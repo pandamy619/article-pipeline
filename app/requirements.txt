@@ -1,0 +1,23 @@
+# Сбор источников
+feedparser
+trafilatura
+praw            # Reddit
+arxiv           # arXiv API
+telethon        # чтение чужих TG-каналов
+
+# Telegram-бот
+aiogram>=3
+
+# LLM / эмбеддинги
+httpx           # клиент к Ollama HTTP API
+
+# Хранилище
+SQLAlchemy
+alembic
+psycopg[binary]
+redis           # клиент совместим с Valkey
+
+# Утилиты
+pydantic
+pydantic-settings
+APScheduler
