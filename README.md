@@ -13,7 +13,7 @@
 ## Стек
 
 Python · Ollama (Qwen3-14B) · bge-m3 · PostgreSQL · Valkey · SearXNG · aiogram · Telethon · Docker.
-Подробнее — в [docs/architecture.md](docs/architecture.md) и [docs/repo-architecture.md](docs/repo-architecture.md).
+Обзор архитектуры со схемой — в [ARCHITECTURE.md](ARCHITECTURE.md). Детали по стеку и репозиторию — [docs/architecture.md](docs/architecture.md) и [docs/repo-architecture.md](docs/repo-architecture.md).
 
 ## Структура
 
