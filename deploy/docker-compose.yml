@@ -1,12 +1,14 @@
-# Прод-конфиг (Windows + GPU). Запуск:  docker compose up -d
-# Для разработки на Mac используйте оверрайд docker-compose.dev.yml (см. docs/repo-architecture.md).
+# Прод-конфиг (Windows + GPU). Запуск:  docker compose --profile gpu up -d
+# Разработка на Mac (Ollama нативная, контейнер ollama НЕ нужен):
+#   docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml up -d postgres valkey searxng app
 # Проверка GPU: docker run --rm --gpus all nvidia/cuda:12.4.0-base-ubuntu22.04 nvidia-smi
 
 services:
-  # Локальный LLM-движок с доступом к RTX 4080
+  # Локальный LLM-движок с GPU. Только на проде (профиль gpu); на Mac Ollama нативная.
   ollama:
     image: ollama/ollama:latest
     container_name: ollama
+    profiles: ["gpu"]
     ports: ["11434:11434"]
     volumes: [ollama:/root/.ollama]
     deploy:
@@ -18,9 +20,10 @@ services:
               capabilities: [gpu]
     restart: unless-stopped
 
-  # Разовая загрузка моделей при первом запуске
+  # Разовая загрузка моделей при первом запуске (профиль gpu)
   ollama-pull:
     image: ollama/ollama:latest
+    profiles: ["gpu"]
     depends_on: [ollama]
     environment: ["OLLAMA_HOST=ollama:11434"]
     entrypoint: ["sh", "-c", "sleep 5 && ollama pull qwen3:14b && ollama pull bge-m3"]
@@ -34,11 +37,21 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
     volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     restart: unless-stopped
 
   valkey:
     image: valkey/valkey:8        # открытый (BSD) форк Redis, протокол-совместим
     container_name: valkey
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     restart: unless-stopped
 
   searxng:
@@ -46,13 +59,21 @@ services:
     container_name: searxng
     ports: ["8080:8080"]
     volumes: ["./searxng:/etc/searxng"]
+    environment:
+      - SEARXNG_SECRET=${SEARXNG_SECRET}     # подставляется в settings.yml при старте
     restart: unless-stopped
 
   # Основной сервис: сборщик + фильтр + рерайт + бот (aiogram)
   app:
     build: ../app
     container_name: app
-    depends_on: [ollama, postgres, valkey, searxng]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      searxng:
+        condition: service_started
     env_file: .env
     environment:
       - OLLAMA_HOST=http://ollama:11434

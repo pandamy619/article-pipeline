@@ -2,7 +2,7 @@
 use_default_settings: true
 
 server:
-  secret_key: "CHANGE_ME"        # ОБЯЗАТЕЛЬНО замените на случайную строку
+  secret_key: "ultrasecretkey"   # подставляется из SEARXNG_SECRET (.env) при старте контейнера
   limiter: false
 
 search:
