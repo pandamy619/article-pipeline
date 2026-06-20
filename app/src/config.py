@@ -20,7 +20,7 @@ class Settings(BaseSettings):
 
     # Telegram
     telegram_bot_token: str = ""
-    telegram_group_id: str = ""
+    telegram_channel_id: str = ""
     admin_user_id: str = ""
 
     # Поведение

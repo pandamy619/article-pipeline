@@ -14,6 +14,7 @@ from src.config import settings
 from src.db.base import get_session
 from src.moderation import service
 from src.moderation.keyboards import review_keyboard
+from src.publisher.telegram import publish
 
 router = Router()
 
@@ -24,10 +25,6 @@ class EditState(StatesGroup):
 
 def _admin_id() -> int:
     return int(settings.admin_user_id)
-
-
-def _group_id() -> int:
-    return int(settings.telegram_group_id)
 
 
 async def send_drafts(bot: Bot) -> int:
@@ -83,9 +80,13 @@ async def on_action(query: CallbackQuery, bot: Bot, state: FSMContext) -> None:
         if not post:
             await query.answer("Пост пуст")
             return
-        msg = await bot.send_message(_group_id(), post)
+        try:
+            message_id = await publish(bot, settings.telegram_channel_id, post)
+        except Exception:
+            await query.answer("Ошибка публикации")
+            return
         with get_session() as session:
-            service.mark_published(session, article_id, msg.message_id)
+            service.mark_published(session, article_id, message_id)
         if isinstance(query.message, Message):
             await query.message.edit_reply_markup(reply_markup=None)
         await query.answer("Опубликовано ✅")
