@@ -10,8 +10,6 @@ services:
   app:
     environment:
       - OLLAMA_HOST=http://host.docker.internal:11434   # нативная Ollama на macOS-хосте
-      - LLM_MODEL=qwen3:4b                              # меньшая модель для дева (быстрее на Mac)
-      - EMBED_MODEL=bge-m3
       - ENV=dev
     extra_hosts:
       - "host.docker.internal:host-gateway"            # чтобы контейнер видел хост (нужно вне Docker Desktop)
@@ -21,8 +19,6 @@ services:
   admin:
     environment:
       - OLLAMA_HOST=http://host.docker.internal:11434
-      - LLM_MODEL=qwen3:4b
-      - EMBED_MODEL=bge-m3
       - ENV=dev
     extra_hosts:
       - "host.docker.internal:host-gateway"
