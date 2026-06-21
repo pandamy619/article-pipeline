@@ -10,6 +10,7 @@ import {
 import type { Article, Stats } from "./types";
 
 const STATUSES = ["new", "filtered", "drafted", "pending", "published", "rejected"];
+type Mode = "preview" | "edit";
 
 export default function App() {
   const [articles, setArticles] = useState<Article[]>([]);
@@ -17,6 +18,7 @@ export default function App() {
   const [status, setStatus] = useState<string>("");
   const [busy, setBusy] = useState(false);
   const [openId, setOpenId] = useState<number | null>(null);
+  const [mode, setMode] = useState<Mode>("preview");
 
   async function refresh(current: string) {
     const [a, s] = await Promise.all([
@@ -38,6 +40,15 @@ export default function App() {
       await refresh(status);
     } finally {
       setBusy(false);
+    }
+  }
+
+  function openPanel(id: number, m: Mode) {
+    if (openId === id && mode === m) {
+      setOpenId(null);
+    } else {
+      setOpenId(id);
+      setMode(m);
     }
   }
 
@@ -96,24 +107,32 @@ export default function App() {
                 <td style={td}>{a.source}</td>
                 <td style={{ ...td, whiteSpace: "nowrap" }}>
                   {a.post_text && (
-                    <button
-                      onClick={() => setOpenId(openId === a.id ? null : a.id)}
-                      title="превью поста"
-                    >
+                    <button onClick={() => openPanel(a.id, "preview")} title="превью">
                       📄
                     </button>
                   )}
-                  <button disabled={busy} onClick={() => run(() => runAction(a.id, "draft"))}>
-                    ✍
+                  {a.post_text && (
+                    <button onClick={() => openPanel(a.id, "edit")} title="редактировать">
+                      ✏️
+                    </button>
+                  )}
+                  <button
+                    disabled={busy}
+                    title="перегенерировать"
+                    onClick={() => run(() => runAction(a.id, "draft"))}
+                  >
+                    🔄
                   </button>
                   <button
                     disabled={busy}
+                    title="опубликовать"
                     onClick={() => run(() => runAction(a.id, "publish"))}
                   >
                     ✅
                   </button>
                   <button
                     disabled={busy}
+                    title="отклонить"
                     onClick={() => run(() => runAction(a.id, "reject"))}
                   >
                     ❌
@@ -123,7 +142,15 @@ export default function App() {
               {openId === a.id && a.post_text && (
                 <tr>
                   <td style={td} colSpan={6}>
-                    <PostEditor article={a} onChanged={() => refresh(status)} />
+                    {mode === "preview" ? (
+                      <PreviewPanel text={a.post_text} onEdit={() => setMode("edit")} />
+                    ) : (
+                      <EditPanel
+                        article={a}
+                        onChanged={() => refresh(status)}
+                        onPreview={() => setMode("preview")}
+                      />
+                    )}
                   </td>
                 </tr>
               )}
@@ -138,6 +165,139 @@ export default function App() {
           )}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function PreviewPanel({ text, onEdit }: { text: string; onEdit: () => void }) {
+  return (
+    <div>
+      <button onClick={onEdit} style={{ marginBottom: 8 }}>
+        ✏️ Редактировать
+      </button>
+      <TelegramPreview text={text} />
+    </div>
+  );
+}
+
+function EditPanel({
+  article,
+  onChanged,
+  onPreview,
+}: {
+  article: Article;
+  onChanged: () => Promise<void>;
+  onPreview: () => void;
+}) {
+  const [text, setText] = useState(article.post_text ?? "");
+  const [instruction, setInstruction] = useState("");
+  const [working, setWorking] = useState(false);
+  const [log, setLog] = useState<string[]>([]);
+
+  async function save() {
+    setWorking(true);
+    try {
+      await savePost(article.id, text);
+      await onChanged();
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  async function ask() {
+    const ins = instruction.trim();
+    if (!ins) return;
+    setWorking(true);
+    setLog((l) => [...l, `🧑 ${ins}`]);
+    try {
+      const updated = await revisePost(article.id, ins);
+      if (updated) setText(updated);
+      setLog((l) => [...l, "🤖 переписал пост ✓"]);
+      setInstruction("");
+      await onChanged();
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  return (
+    <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+      {/* слева: правка прямо в окне поста */}
+      <div style={{ flex: "1 1 380px" }}>
+        <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
+          <button onClick={onPreview}>👁 Превью</button>
+          <button disabled={working} onClick={save}>
+            💾 Сохранить
+          </button>
+        </div>
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          style={{
+            width: "100%",
+            minHeight: 240,
+            boxSizing: "border-box",
+            padding: 12,
+            borderRadius: 12,
+            border: "1px solid #ccc",
+            fontFamily: "inherit",
+            fontSize: 15,
+            lineHeight: 1.45,
+          }}
+        />
+      </div>
+
+      {/* справа: чат с моделью */}
+      <div
+        style={{
+          flex: "1 1 300px",
+          display: "flex",
+          flexDirection: "column",
+          border: "1px solid #ddd",
+          borderRadius: 8,
+          padding: 10,
+        }}
+      >
+        <strong style={{ fontSize: 13 }}>Чат с ИИ</strong>
+        <div
+          style={{
+            flex: 1,
+            minHeight: 140,
+            maxHeight: 220,
+            overflowY: "auto",
+            fontSize: 13,
+            color: "#444",
+            margin: "8px 0",
+          }}
+        >
+          {log.length === 0 ? (
+            <span style={{ color: "#999" }}>
+              Опиши, что изменить — модель перепишет пост слева.
+            </span>
+          ) : (
+            log.map((line, i) => (
+              <div key={i} style={{ marginBottom: 4 }}>
+                {line}
+              </div>
+            ))
+          )}
+        </div>
+        <div style={{ display: "flex", gap: 6 }}>
+          <input
+            value={instruction}
+            onChange={(e) => setInstruction(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") ask();
+            }}
+            placeholder="сделай короче, добавь эмодзи…"
+            style={{ flex: 1, padding: 6 }}
+          />
+          <button disabled={working} onClick={ask}>
+            ➤
+          </button>
+        </div>
+        {working && <small style={{ color: "#666" }}>модель думает…</small>}
+      </div>
     </div>
   );
 }
@@ -179,83 +339,6 @@ function TelegramPreview({ text }: { text: string }) {
         }}
       >
         {linkify(text)}
-      </div>
-    </div>
-  );
-}
-
-function PostEditor({
-  article,
-  onChanged,
-}: {
-  article: Article;
-  onChanged: () => Promise<void>;
-}) {
-  const [text, setText] = useState(article.post_text ?? "");
-  const [instruction, setInstruction] = useState("");
-  const [working, setWorking] = useState(false);
-
-  async function save() {
-    setWorking(true);
-    try {
-      await savePost(article.id, text);
-      await onChanged();
-    } finally {
-      setWorking(false);
-    }
-  }
-
-  async function ask() {
-    if (!instruction.trim()) return;
-    setWorking(true);
-    try {
-      const updated = await revisePost(article.id, instruction);
-      if (updated) setText(updated);
-      setInstruction("");
-      await onChanged();
-    } finally {
-      setWorking(false);
-    }
-  }
-
-  return (
-    <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-      <div style={{ flex: "1 1 380px" }}>
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          style={{
-            width: "100%",
-            minHeight: 170,
-            fontFamily: "inherit",
-            fontSize: 14,
-            padding: 8,
-            boxSizing: "border-box",
-          }}
-        />
-        <div style={{ marginTop: 6 }}>
-          <button disabled={working} onClick={save}>
-            💾 Сохранить
-          </button>
-        </div>
-        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-          <input
-            value={instruction}
-            onChange={(e) => setInstruction(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") ask();
-            }}
-            placeholder="Напр.: сделай короче, добавь эмодзи, убери хэштеги"
-            style={{ flex: 1, padding: 6 }}
-          />
-          <button disabled={working} onClick={ask}>
-            🤖 Попросить ИИ
-          </button>
-        </div>
-        {working && <small style={{ color: "#666" }}>модель думает…</small>}
-      </div>
-      <div style={{ flex: "1 1 320px" }}>
-        <TelegramPreview text={text} />
       </div>
     </div>
   );
