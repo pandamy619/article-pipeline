@@ -118,13 +118,6 @@ export default function App() {
                   )}
                   <button
                     disabled={busy}
-                    title="перегенерировать"
-                    onClick={() => run(() => runAction(a.id, "draft"))}
-                  >
-                    🔄
-                  </button>
-                  <button
-                    disabled={busy}
                     title="опубликовать"
                     onClick={() => run(() => runAction(a.id, "publish"))}
                   >
@@ -230,21 +223,27 @@ function EditPanel({
             💾 Сохранить
           </button>
         </div>
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          style={{
-            width: "100%",
-            minHeight: 240,
-            boxSizing: "border-box",
-            padding: 12,
-            borderRadius: 12,
-            border: "1px solid #ccc",
-            fontFamily: "inherit",
-            fontSize: 15,
-            lineHeight: 1.45,
-          }}
-        />
+        <div style={{ background: "#cfe0ee", padding: 16, borderRadius: 8 }}>
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            style={{
+              width: "100%",
+              maxWidth: 480,
+              minHeight: 220,
+              boxSizing: "border-box",
+              background: "#fff",
+              border: "none",
+              borderRadius: 12,
+              padding: "8px 12px",
+              fontFamily: "inherit",
+              fontSize: 15,
+              lineHeight: 1.45,
+              resize: "vertical",
+              boxShadow: "0 1px 1px rgba(0,0,0,0.15)",
+            }}
+          />
+        </div>
       </div>
 
       {/* справа: чат с моделью */}
