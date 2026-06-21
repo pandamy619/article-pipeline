@@ -14,7 +14,7 @@ class OllamaClient:
         model: str | None = None,
         timeout: float = 120.0,
         think: bool = False,
-        num_predict: int = 600,
+        num_predict: int = 400,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
         self.host = (host or settings.ollama_host).rstrip("/")
