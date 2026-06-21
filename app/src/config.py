@@ -25,6 +25,7 @@ class Settings(BaseSettings):
 
     # Поведение
     relevance_threshold: int = 7
+    run_interval_minutes: int = 60
 
     # Источники
     rss_feeds: str = ""  # список URL через запятую

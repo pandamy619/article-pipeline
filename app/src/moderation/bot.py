@@ -9,11 +9,14 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from src.config import settings
 from src.db.base import get_session
+from src.llm.client import OllamaClient
 from src.moderation import service
 from src.moderation.keyboards import review_keyboard
+from src.pipeline import PipelineResult, run_pipeline
 from src.publisher.telegram import publish
 
 router = Router()
@@ -104,6 +107,20 @@ async def on_edit_text(message: Message, state: FSMContext) -> None:
     await message.answer(new_text, reply_markup=review_keyboard(article_id))
 
 
+async def _scheduled_run(bot: Bot) -> None:
+    """Гоняет пайплайн в отдельном потоке и шлёт новые черновики на модерацию."""
+
+    def _process() -> PipelineResult:
+        client = OllamaClient()
+        with get_session() as session:
+            return run_pipeline(session, client)
+
+    await asyncio.to_thread(_process)
+    sent = await send_drafts(bot)
+    if sent:
+        await bot.send_message(_admin_id(), f"Новых черновиков на модерацию: {sent}")
+
+
 def build_dispatcher() -> Dispatcher:
     dp = Dispatcher()
     dp.include_router(router)
@@ -112,6 +129,14 @@ def build_dispatcher() -> Dispatcher:
 
 async def run() -> None:
     bot = Bot(settings.telegram_bot_token)
+    scheduler = AsyncIOScheduler()
+    scheduler.add_job(
+        _scheduled_run,
+        "interval",
+        minutes=settings.run_interval_minutes,
+        args=[bot],
+    )
+    scheduler.start()
     await build_dispatcher().start_polling(bot)
 
 
