@@ -22,6 +22,12 @@ def test_extract_post_handles_json_and_plain():
     assert _extract_post("просто текст") == "просто текст"
 
 
+def test_extract_post_truncated_json():
+    # обрезанный по лимиту токенов JSON (нет закрывающей кавычки и скобки)
+    assert _extract_post('{"post": "привет мир') == "привет мир"
+    assert _extract_post('{"post": "строка\\nещё"}') == "строка\nещё"
+
+
 def test_generate_post_appends_source():
     art = Article("T", "https://e.com/a", "тело", "src")
     post = generate_post(art, client=FakeGen("Заголовок\n\nКороткий текст #python"))

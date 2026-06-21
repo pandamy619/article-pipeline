@@ -50,7 +50,7 @@ def _extract_json(raw: str) -> dict | None:
         if not candidate:
             continue
         try:
-            data = json.loads(candidate)
+            data = json.loads(candidate, strict=False)
         except json.JSONDecodeError:
             continue
         if isinstance(data, dict):

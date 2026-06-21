@@ -42,11 +42,18 @@ def _extract_post(raw: str) -> str:
         candidates.append(match.group())
     for candidate in candidates:
         try:
-            data = json.loads(candidate)
+            data = json.loads(candidate, strict=False)
         except json.JSONDecodeError:
             continue
         if isinstance(data, dict) and data.get("post"):
             return str(data["post"]).strip()
+    # фолбэк: вытащить значение "post" даже из обрезанного/битого JSON
+    truncated = re.search(r'"post"\s*:\s*"(.*)', cleaned, re.DOTALL)
+    if truncated:
+        value = truncated.group(1).strip().rstrip("}").strip()
+        if value.endswith('"'):
+            value = value[:-1]
+        return value.replace('\\"', '"').replace("\\n", "\n").strip()
     return cleaned
 
 
