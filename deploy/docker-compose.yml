@@ -87,6 +87,27 @@ services:
       - ../sessions:/app/sessions   # .session Telethon
     restart: unless-stopped
 
+  # Веб-админка: просмотр статей и ручной отбор (http://localhost:8000)
+  admin:
+    build: ../app
+    container_name: admin
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - REDIS_URL=redis://valkey:6379/0
+      - SEARXNG_URL=http://searxng:8080
+      - OLLAMA_HOST=http://ollama:11434
+      - LLM_MODEL=qwen3:14b
+      - EMBED_MODEL=bge-m3
+    command: ["uvicorn", "src.admin.app:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports: ["8000:8000"]
+    volumes:
+      - ../app:/app
+    restart: unless-stopped
+
   # Опционально: оркестрация (docker compose --profile orchestration up -d)
   n8n:
     image: n8nio/n8n:latest
