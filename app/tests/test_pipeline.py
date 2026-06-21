@@ -4,12 +4,12 @@ from src.pipeline import run_pipeline
 
 
 class FakeLLM:
-    """Возвращает score-JSON для фильтра и текст поста для рерайта."""
+    """Фильтр (score-JSON) и рерайт (post-JSON) различаем по system-промпту."""
 
     def generate(self, prompt, *, system=None, format=None):
-        if format == "json":
-            return '{"score": 9, "reason": "ok"}'
-        return "Заголовок поста\n\nкороткий текст #python"
+        if system and '"post"' in system:
+            return '{"post": "Пост для новичков #python"}'
+        return '{"score": 9, "reason": "ok"}'
 
 
 def fake_collector(feeds):

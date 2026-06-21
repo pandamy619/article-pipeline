@@ -1,18 +1,25 @@
+import json
+
 from src.collectors.base import Article
 from src.db.models import ArticleRecord, ArticleStatus
 from src.db.repo import save_articles
-from src.rewrite.post import _assemble, generate_post
+from src.rewrite.post import _assemble, _extract_post, generate_post
 from src.rewrite.service import apply_rewrite
 
 
 class FakeGen:
     def __init__(self, body):
         self.body = body
-        self.last_system = None
+        self.last_format = None
 
     def generate(self, prompt, *, system=None, format=None):
-        self.last_system = system
-        return self.body
+        self.last_format = format
+        return json.dumps({"post": self.body})
+
+
+def test_extract_post_handles_json_and_plain():
+    assert _extract_post('{"post": "привет"}') == "привет"
+    assert _extract_post("просто текст") == "просто текст"
 
 
 def test_generate_post_appends_source():

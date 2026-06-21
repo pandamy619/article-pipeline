@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import re
 from typing import Protocol
 
 from src.collectors.base import Article
@@ -10,13 +12,13 @@ TELEGRAM_LIMIT = 4096
 
 SYSTEM_PROMPT = (
     "Ты — редактор Telegram-канала для начинающих программистов. "
-    "По статье напиши КОРОТКИЙ пост на русском языке: "
+    "По статье составь короткий готовый пост на русском языке: "
     "цепляющий заголовок первой строкой, затем 2–3 предложения по сути "
     "(чем полезно новичку), в конце 2–3 хэштега. "
     "Только суть, без пересказа всей статьи, простым языком, без воды, "
-    "не выдумывай фактов, без markdown-заголовков. "
-    "Весь пост — не длиннее 700 символов. "
-    "Не добавляй ссылку на источник — её добавят автоматически."
+    "не выдумывай фактов, без markdown-заголовков, не длиннее 700 символов, "
+    "без ссылки на источник (её добавят автоматически). "
+    'Ответь СТРОГО в JSON: {"post": "<готовый текст поста>"}.'
 )
 
 
@@ -31,6 +33,23 @@ def build_prompt(article: Article) -> str:
     return f"Заголовок: {article.title}\nИсточник: {article.source}\n\nТекст:\n{text}"
 
 
+def _extract_post(raw: str) -> str:
+    """Достаёт текст поста из JSON-ответа; терпит <think> и текст вокруг."""
+    cleaned = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
+    candidates = [cleaned]
+    match = re.search(r"\{.*\}", cleaned, re.DOTALL)
+    if match:
+        candidates.append(match.group())
+    for candidate in candidates:
+        try:
+            data = json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(data, dict) and data.get("post"):
+            return str(data["post"]).strip()
+    return cleaned
+
+
 def _assemble(body: str, url: str, limit: int = TELEGRAM_LIMIT) -> str:
     body = body.strip()
     tail = f"\n\nИсточник: {url}"
@@ -42,5 +61,5 @@ def _assemble(body: str, url: str, limit: int = TELEGRAM_LIMIT) -> str:
 def generate_post(
     article: Article, *, client: Generator, limit: int = TELEGRAM_LIMIT
 ) -> str:
-    body = client.generate(build_prompt(article), system=SYSTEM_PROMPT)
-    return _assemble(body, article.url, limit=limit)
+    raw = client.generate(build_prompt(article), system=SYSTEM_PROMPT, format="json")
+    return _assemble(_extract_post(raw), article.url, limit=limit)
