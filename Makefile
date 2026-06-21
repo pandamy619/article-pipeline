@@ -1,7 +1,7 @@
 # Команды для разработки (Mac). Прод на Windows — см. README.
 COMPOSE = docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml
 
-.PHONY: up down logs ps collect migrate reset test
+.PHONY: up down logs ps collect migrate reset clean test
 
 # поднять весь стек (dev; Ollama — нативная, не в Docker)
 up:
@@ -27,9 +27,13 @@ collect:
 migrate:
 	$(COMPOSE) exec app alembic upgrade head
 
-# очистить все статьи (перепрогон с нуля)
+# очистить все статьи (перепрогон с нуля; схема остаётся)
 reset:
 	$(COMPOSE) exec app python -c "from src.db.base import SessionLocal; from src.db.models import ArticleRecord; s=SessionLocal(); n=s.query(ArticleRecord).delete(); s.commit(); s.close(); print('deleted', n)"
+
+# СНЕСТИ ВСЁ: контейнеры + тома (вся БД будет удалена!)
+clean:
+	$(COMPOSE) down -v
 
 # тесты + линтер
 test:
