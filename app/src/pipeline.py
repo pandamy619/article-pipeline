@@ -26,16 +26,23 @@ class PipelineResult:
     drafted: int
 
 
+def _default_collector(feeds: Iterable[str]) -> list[Article]:
+    limit = settings.max_articles_per_run or None
+    return collect_rss(feeds, limit_per_feed=limit)
+
+
 def run_pipeline(
     session: Session,
     llm_client: Scorer,
     *,
-    collector: Callable[[Iterable[str]], list[Article]] = collect_rss,
+    collector: Callable[[Iterable[str]], list[Article]] = _default_collector,
     feeds: list[str] | None = None,
 ) -> PipelineResult:
     """Один полный прогон: RSS -> дедуп -> фильтр релевантности -> рерайт в черновики."""
     feeds = feeds if feeds is not None else settings.rss_feed_list
     articles = list(collector(feeds))
+    if settings.max_articles_per_run:
+        articles = articles[: settings.max_articles_per_run]
     saved = save_articles(session, articles)
     filtered = apply_relevance_filter(session, llm_client)
     rewritten = apply_rewrite(session, llm_client)

@@ -32,6 +32,22 @@ def test_run_pipeline_end_to_end(session):
     assert all(d.post_text and "Источник:" in d.post_text for d in drafts)
 
 
+def test_run_pipeline_respects_max(session, monkeypatch):
+    import src.config
+
+    monkeypatch.setattr(src.config.settings, "max_articles_per_run", 1)
+
+    def collector3(feeds):
+        return [
+            Article("a", "https://e.com/1", "x", "s"),
+            Article("b", "https://e.com/2", "x", "s"),
+            Article("c", "https://e.com/3", "x", "s"),
+        ]
+
+    result = run_pipeline(session, FakeLLM(), collector=collector3, feeds=[])
+    assert result.collected == 1
+
+
 def test_run_pipeline_dedup_on_second_run(session):
     run_pipeline(session, FakeLLM(), collector=fake_collector, feeds=[])
     result = run_pipeline(session, FakeLLM(), collector=fake_collector, feeds=[])
