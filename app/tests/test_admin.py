@@ -38,16 +38,24 @@ def client(monkeypatch):
     return TestClient(app)
 
 
-def test_index_lists_articles(client):
-    r = client.get("/")
+def test_list_articles(client):
+    r = client.get("/api/articles")
     assert r.status_code == 200
-    assert "Тестовая статья" in r.text
-    assert "Tproger" in r.text
-    assert "подходит новичку" in r.text
+    data = r.json()
+    assert len(data) == 1
+    assert data[0]["title"] == "Тестовая статья"
+    assert data[0]["source"] == "Tproger"
+    assert data[0]["relevance_score"] == 8
+
+
+def test_stats(client):
+    data = client.get("/api/stats").json()
+    assert data["new"] == 1
+    assert data["total"] == 1
 
 
 def test_reject_action(client):
-    client.post("/articles/1/reject")
+    assert client.post("/api/articles/1/reject").json() == {"ok": True}
     s = db_base.SessionLocal()
     assert s.get(ArticleRecord, 1).status == ArticleStatus.rejected
     s.close()
