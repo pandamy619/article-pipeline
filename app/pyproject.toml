@@ -22,6 +22,9 @@ redis = "*"           # клиент совместим с Valkey
 pydantic = "*"
 pydantic-settings = "*"
 APScheduler = "*"
+# Веб-админка
+fastapi = "*"
+uvicorn = { extras = ["standard"], version = "*" }
 
 [tool.poetry.group.dev.dependencies]
 ruff = "*"
