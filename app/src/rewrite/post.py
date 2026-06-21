@@ -70,3 +70,19 @@ def generate_post(
 ) -> str:
     raw = client.generate(build_prompt(article), system=SYSTEM_PROMPT, format="json")
     return _assemble(_extract_post(raw), article.url, limit=limit)
+
+
+REVISE_SYSTEM = (
+    "Ты — редактор Telegram-канала для начинающих программистов. "
+    "Перепиши пост по инструкции пользователя, сохрани смысл и факты, "
+    "простым языком, без markdown-заголовков, не длиннее 700 символов, "
+    "без ссылки на источник. "
+    'Ответь СТРОГО в JSON: {"post": "<новый текст поста>"}.'
+)
+
+
+def revise_post(current_post: str, instruction: str, *, client: Generator) -> str:
+    """Переписывает текст поста по инструкции пользователя."""
+    prompt = f"Текущий пост:\n{current_post}\n\nИнструкция: {instruction}"
+    raw = client.generate(prompt, system=REVISE_SYSTEM, format="json")
+    return _extract_post(raw)

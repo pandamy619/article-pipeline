@@ -124,6 +124,52 @@ async def publish_article(article_id: int) -> dict[str, bool]:
     return {"ok": True}
 
 
+class PostUpdate(BaseModel):
+    text: str
+
+
+class ReviseIn(BaseModel):
+    instruction: str
+
+
+SOURCE_SEP = "\n\nИсточник:"
+
+
+@app.post("/api/articles/{article_id}/post")
+def save_post(article_id: int, body: PostUpdate) -> dict[str, bool]:
+    with get_session() as session:
+        rec = session.get(ArticleRecord, article_id)
+        if rec:
+            rec.post_text = body.text
+    return {"ok": True}
+
+
+@app.post("/api/articles/{article_id}/revise")
+async def revise(article_id: int, body: ReviseIn) -> dict[str, object]:
+    with get_session() as session:
+        rec = session.get(ArticleRecord, article_id)
+        current = (rec.post_text or "") if rec else ""
+        url = rec.url if rec else ""
+    if not current:
+        return {"ok": False}
+
+    body_only = current.split(SOURCE_SEP)[0]
+
+    def _revise() -> str:
+        from src.llm.client import OllamaClient
+        from src.rewrite.post import _assemble, revise_post
+
+        new_body = revise_post(body_only, body.instruction, client=OllamaClient())
+        return _assemble(new_body, url)
+
+    new_post = await asyncio.to_thread(_revise)
+    with get_session() as session:
+        rec = session.get(ArticleRecord, article_id)
+        if rec:
+            rec.post_text = new_post
+    return {"ok": True, "post": new_post}
+
+
 @app.post("/api/collect")
 async def collect_now() -> dict[str, bool]:
     def _run() -> None:

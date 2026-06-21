@@ -1,5 +1,12 @@
 import { type CSSProperties, Fragment, useEffect, useState } from "react";
-import { collect, fetchArticles, fetchStats, runAction } from "./api";
+import {
+  collect,
+  fetchArticles,
+  fetchStats,
+  revisePost,
+  runAction,
+  savePost,
+} from "./api";
 import type { Article, Stats } from "./types";
 
 const STATUSES = ["new", "filtered", "drafted", "pending", "published", "rejected"];
@@ -116,7 +123,7 @@ export default function App() {
               {openId === a.id && a.post_text && (
                 <tr>
                   <td style={td} colSpan={6}>
-                    <TelegramPreview text={a.post_text} />
+                    <PostEditor article={a} onChanged={() => refresh(status)} />
                   </td>
                 </tr>
               )}
@@ -172,6 +179,83 @@ function TelegramPreview({ text }: { text: string }) {
         }}
       >
         {linkify(text)}
+      </div>
+    </div>
+  );
+}
+
+function PostEditor({
+  article,
+  onChanged,
+}: {
+  article: Article;
+  onChanged: () => Promise<void>;
+}) {
+  const [text, setText] = useState(article.post_text ?? "");
+  const [instruction, setInstruction] = useState("");
+  const [working, setWorking] = useState(false);
+
+  async function save() {
+    setWorking(true);
+    try {
+      await savePost(article.id, text);
+      await onChanged();
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  async function ask() {
+    if (!instruction.trim()) return;
+    setWorking(true);
+    try {
+      const updated = await revisePost(article.id, instruction);
+      if (updated) setText(updated);
+      setInstruction("");
+      await onChanged();
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  return (
+    <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+      <div style={{ flex: "1 1 380px" }}>
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          style={{
+            width: "100%",
+            minHeight: 170,
+            fontFamily: "inherit",
+            fontSize: 14,
+            padding: 8,
+            boxSizing: "border-box",
+          }}
+        />
+        <div style={{ marginTop: 6 }}>
+          <button disabled={working} onClick={save}>
+            💾 Сохранить
+          </button>
+        </div>
+        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+          <input
+            value={instruction}
+            onChange={(e) => setInstruction(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") ask();
+            }}
+            placeholder="Напр.: сделай короче, добавь эмодзи, убери хэштеги"
+            style={{ flex: 1, padding: 6 }}
+          />
+          <button disabled={working} onClick={ask}>
+            🤖 Попросить ИИ
+          </button>
+        </div>
+        {working && <small style={{ color: "#666" }}>модель думает…</small>}
+      </div>
+      <div style={{ flex: "1 1 320px" }}>
+        <TelegramPreview text={text} />
       </div>
     </div>
   );

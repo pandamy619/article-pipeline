@@ -60,3 +60,32 @@ def test_reject_action(client):
     s = db_base.SessionLocal()
     assert s.get(ArticleRecord, 1).status == ArticleStatus.rejected
     s.close()
+
+
+def test_save_post(client):
+    client.post("/api/articles/1/post", json={"text": "новый пост"})
+    s = db_base.SessionLocal()
+    assert s.get(ArticleRecord, 1).post_text == "новый пост"
+    s.close()
+
+
+def test_revise(client, monkeypatch):
+    import src.llm.client as llm
+
+    class FakeClient:
+        def __init__(self, *a, **k):
+            pass
+
+        def generate(self, prompt, *, system=None, format=None):
+            return '{"post": "переписанный пост"}'
+
+    monkeypatch.setattr(llm, "OllamaClient", FakeClient)
+
+    s = db_base.SessionLocal()
+    s.get(ArticleRecord, 1).post_text = "старый\n\nИсточник: https://e.com/1"
+    s.commit()
+    s.close()
+
+    data = client.post("/api/articles/1/revise", json={"instruction": "короче"}).json()
+    assert data["ok"] is True
+    assert "переписанный пост" in data["post"]
