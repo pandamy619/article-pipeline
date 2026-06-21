@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 import httpx
 
 from src.config import settings
@@ -50,3 +52,18 @@ class OllamaClient:
         resp = self._client.post("/api/generate", json=payload)
         resp.raise_for_status()
         return resp.json().get("response", "")
+
+    def chat(self, messages: list[dict], *, format: str | None = None) -> str:
+        payload: dict = {
+            "model": self.model,
+            "messages": messages,
+            "stream": False,
+            "think": self.think,
+            "options": {"num_predict": self.num_predict},
+        }
+        if format:
+            payload["format"] = format
+        resp = self._client.post("/api/chat", json=payload)
+        resp.raise_for_status()
+        content = resp.json().get("message", {}).get("content", "")
+        return re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()

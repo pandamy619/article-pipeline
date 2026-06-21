@@ -89,3 +89,22 @@ def test_revise(client, monkeypatch):
     data = client.post("/api/articles/1/revise", json={"instruction": "короче"}).json()
     assert data["ok"] is True
     assert "переписанный пост" in data["post"]
+
+
+def test_chat(client, monkeypatch):
+    import src.llm.client as llm
+
+    class FakeClient:
+        def __init__(self, *a, **k):
+            pass
+
+        def chat(self, messages, *, format=None):
+            return "это полезная статья для новичков"
+
+    monkeypatch.setattr(llm, "OllamaClient", FakeClient)
+
+    data = client.post(
+        "/api/articles/1/chat",
+        json={"messages": [{"role": "user", "content": "как тебе статья?"}]},
+    ).json()
+    assert "новичков" in data["reply"]

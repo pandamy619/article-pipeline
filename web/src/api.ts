@@ -36,3 +36,18 @@ export async function revisePost(id: number, instruction: string): Promise<strin
   const data = await r.json();
   return (data.post as string) ?? "";
 }
+
+export interface ChatMsg {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export async function chatArticle(id: number, messages: ChatMsg[]): Promise<string> {
+  const r = await fetch(`/api/articles/${id}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ messages }),
+  });
+  const data = await r.json();
+  return (data.reply as string) ?? "";
+}

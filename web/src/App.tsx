@@ -1,9 +1,10 @@
 import { type CSSProperties, Fragment, useEffect, useState } from "react";
 import {
+  type ChatMsg,
+  chatArticle,
   collect,
   fetchArticles,
   fetchStats,
-  revisePost,
   runAction,
   savePost,
 } from "./api";
@@ -183,9 +184,9 @@ function EditPanel({
   onPreview: () => void;
 }) {
   const [text, setText] = useState(article.post_text ?? "");
-  const [instruction, setInstruction] = useState("");
+  const [messages, setMessages] = useState<ChatMsg[]>([]);
+  const [input, setInput] = useState("");
   const [working, setWorking] = useState(false);
-  const [log, setLog] = useState<string[]>([]);
 
   async function save() {
     setWorking(true);
@@ -197,17 +198,16 @@ function EditPanel({
     }
   }
 
-  async function ask() {
-    const ins = instruction.trim();
-    if (!ins) return;
+  async function send() {
+    const msg = input.trim();
+    if (!msg) return;
+    const next: ChatMsg[] = [...messages, { role: "user", content: msg }];
+    setMessages(next);
+    setInput("");
     setWorking(true);
-    setLog((l) => [...l, `🧑 ${ins}`]);
     try {
-      const updated = await revisePost(article.id, ins);
-      if (updated) setText(updated);
-      setLog((l) => [...l, "🤖 переписал пост ✓"]);
-      setInstruction("");
-      await onChanged();
+      const reply = await chatArticle(article.id, next);
+      setMessages([...next, { role: "assistant", content: reply }]);
     } finally {
       setWorking(false);
     }
@@ -215,7 +215,7 @@ function EditPanel({
 
   return (
     <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-      {/* слева: правка прямо в окне поста */}
+      {/* слева: правка поста в том же стиле, что превью */}
       <div style={{ flex: "1 1 380px" }}>
         <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
           <button onClick={onPreview}>👁 Превью</button>
@@ -246,10 +246,10 @@ function EditPanel({
         </div>
       </div>
 
-      {/* справа: чат с моделью */}
+      {/* справа: диалог с моделью по статье */}
       <div
         style={{
-          flex: "1 1 300px",
+          flex: "1 1 320px",
           display: "flex",
           flexDirection: "column",
           border: "1px solid #ddd",
@@ -257,45 +257,69 @@ function EditPanel({
           padding: 10,
         }}
       >
-        <strong style={{ fontSize: 13 }}>Чат с ИИ</strong>
+        <strong style={{ fontSize: 13 }}>Чат с ИИ по статье</strong>
         <div
           style={{
             flex: 1,
-            minHeight: 140,
-            maxHeight: 220,
+            minHeight: 180,
+            maxHeight: 300,
             overflowY: "auto",
-            fontSize: 13,
-            color: "#444",
             margin: "8px 0",
+            fontSize: 13,
           }}
         >
-          {log.length === 0 ? (
+          {messages.length === 0 && (
             <span style={{ color: "#999" }}>
-              Опиши, что изменить — модель перепишет пост слева.
+              Спроси что угодно по статье или попроси переписать пост.
             </span>
-          ) : (
-            log.map((line, i) => (
-              <div key={i} style={{ marginBottom: 4 }}>
-                {line}
-              </div>
-            ))
           )}
+          {messages.map((m, i) => (
+            <div
+              key={i}
+              style={{ textAlign: m.role === "user" ? "right" : "left", margin: "6px 0" }}
+            >
+              <div
+                style={{
+                  display: "inline-block",
+                  textAlign: "left",
+                  background: m.role === "user" ? "#dcf8c6" : "#f1f0f0",
+                  padding: "6px 10px",
+                  borderRadius: 10,
+                  maxWidth: "90%",
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                }}
+              >
+                {m.content}
+              </div>
+              {m.role === "assistant" && (
+                <div>
+                  <button
+                    style={{ fontSize: 11, marginTop: 2 }}
+                    onClick={() => setText(m.content)}
+                  >
+                    ↧ вставить в пост
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+          {working && <small style={{ color: "#666" }}>модель печатает…</small>}
         </div>
         <div style={{ display: "flex", gap: 6 }}>
           <input
-            value={instruction}
-            onChange={(e) => setInstruction(e.target.value)}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") ask();
+              if (e.key === "Enter") send();
             }}
-            placeholder="сделай короче, добавь эмодзи…"
+            placeholder="напиши сообщение…"
             style={{ flex: 1, padding: 6 }}
           />
-          <button disabled={working} onClick={ask}>
+          <button disabled={working} onClick={send}>
             ➤
           </button>
         </div>
-        {working && <small style={{ color: "#666" }}>модель думает…</small>}
       </div>
     </div>
   );

@@ -170,6 +170,45 @@ async def revise(article_id: int, body: ReviseIn) -> dict[str, object]:
     return {"ok": True, "post": new_post}
 
 
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+
+class ChatIn(BaseModel):
+    messages: list[ChatMessage]
+
+
+def _chat_system(title: str, text: str, post: str) -> str:
+    return (
+        "Ты — помощник редактора Telegram-канала для начинающих программистов. "
+        "Обсуждай статью и помогай улучшить пост. Отвечай кратко, по-русски. "
+        "Если просят переписать пост — пришли только готовый текст поста.\n\n"
+        f"Статья:\nЗаголовок: {title}\nТекст: {text[:2000]}\n\n"
+        f"Текущий пост:\n{post}"
+    )
+
+
+@app.post("/api/articles/{article_id}/chat")
+async def chat(article_id: int, body: ChatIn) -> dict[str, str]:
+    with get_session() as session:
+        rec = session.get(ArticleRecord, article_id)
+        if not rec:
+            return {"reply": ""}
+        system = _chat_system(rec.title, rec.text, rec.post_text or "")
+
+    msgs = [{"role": "system", "content": system}]
+    msgs += [{"role": m.role, "content": m.content} for m in body.messages]
+
+    def _chat() -> str:
+        from src.llm.client import OllamaClient
+
+        return OllamaClient().chat(msgs)
+
+    reply = await asyncio.to_thread(_chat)
+    return {"reply": reply}
+
+
 @app.post("/api/collect")
 async def collect_now() -> dict[str, bool]:
     def _run() -> None:
