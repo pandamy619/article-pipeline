@@ -46,6 +46,7 @@ def test_list_articles(client):
     assert data[0]["title"] == "Тестовая статья"
     assert data[0]["source"] == "Tproger"
     assert data[0]["relevance_score"] == 8
+    assert "post_text" in data[0]
 
 
 def test_stats(client):

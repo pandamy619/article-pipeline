@@ -7,6 +7,7 @@ export interface Article {
   url: string;
   source: string;
   has_post: boolean;
+  post_text: string | null;
 }
 
 export type Stats = Record<string, number>;

@@ -31,6 +31,7 @@ class ArticleOut(BaseModel):
     url: str
     source: str
     has_post: bool
+    post_text: str | None
 
 
 def _to_out(rec: ArticleRecord) -> ArticleOut:
@@ -43,6 +44,7 @@ def _to_out(rec: ArticleRecord) -> ArticleOut:
         url=rec.url,
         source=rec.source,
         has_post=bool(rec.post_text),
+        post_text=rec.post_text,
     )
 
 
