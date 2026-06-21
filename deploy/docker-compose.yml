@@ -108,6 +108,14 @@ services:
       - ../app:/app
     restart: unless-stopped
 
+  # Фронтенд: React-клиент, раздаётся nginx + проксирует /api на admin (http://localhost:3000)
+  web:
+    build: ../web
+    container_name: web
+    depends_on: [admin]
+    ports: ["3000:80"]
+    restart: unless-stopped
+
   # Опционально: оркестрация (docker compose --profile orchestration up -d)
   n8n:
     image: n8nio/n8n:latest

@@ -18,7 +18,8 @@ Python · Ollama (Qwen3-14B) · bge-m3 · PostgreSQL · Valkey · SearXNG · aio
 ## Структура
 
 ```
-app/      — сервис (сбор, фильтр, рерайт, бот, публикация)
+app/      — бэкенд (сбор, фильтр, рерайт, бот, публикация, admin API)
+web/      — React/TS клиент админки (раздаётся nginx)
 deploy/   — docker-compose, .env.example, конфиг SearXNG
 docs/     — архитектура и описание стека
 ```
