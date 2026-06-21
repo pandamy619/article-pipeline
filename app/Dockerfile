@@ -16,4 +16,5 @@ RUN poetry install --only main
 
 COPY . .
 
-CMD ["python", "-m", "src"]
+# миграции применяются на старте, затем запуск бота + планировщика
+CMD ["sh", "-c", "alembic upgrade head && python -m src"]
