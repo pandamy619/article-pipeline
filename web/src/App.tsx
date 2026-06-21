@@ -116,18 +116,7 @@ export default function App() {
               {openId === a.id && a.post_text && (
                 <tr>
                   <td style={td} colSpan={6}>
-                    <pre
-                      style={{
-                        whiteSpace: "pre-wrap",
-                        margin: 0,
-                        fontFamily: "inherit",
-                        background: "#f9fafb",
-                        padding: 8,
-                        borderRadius: 4,
-                      }}
-                    >
-                      {a.post_text}
-                    </pre>
+                    <TelegramPreview text={a.post_text} />
                   </td>
                 </tr>
               )}
@@ -142,6 +131,48 @@ export default function App() {
           )}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function linkify(text: string) {
+  return text.split(/(https?:\/\/\S+|#[\wа-яёА-ЯЁ]+)/g).map((part, i) => {
+    if (/^https?:\/\//.test(part)) {
+      return (
+        <a key={i} href={part} target="_blank" rel="noreferrer" style={{ color: "#2481cc" }}>
+          {part}
+        </a>
+      );
+    }
+    if (/^#/.test(part)) {
+      return (
+        <span key={i} style={{ color: "#2481cc" }}>
+          {part}
+        </span>
+      );
+    }
+    return <span key={i}>{part}</span>;
+  });
+}
+
+function TelegramPreview({ text }: { text: string }) {
+  return (
+    <div style={{ background: "#cfe0ee", padding: 16, borderRadius: 8 }}>
+      <div
+        style={{
+          background: "#fff",
+          maxWidth: 480,
+          padding: "8px 12px",
+          borderRadius: 12,
+          fontSize: 15,
+          lineHeight: 1.45,
+          whiteSpace: "pre-wrap",
+          wordBreak: "break-word",
+          boxShadow: "0 1px 1px rgba(0,0,0,0.15)",
+        }}
+      >
+        {linkify(text)}
+      </div>
     </div>
   );
 }
