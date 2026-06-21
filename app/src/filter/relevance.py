@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -41,16 +42,36 @@ def build_prompt(article: Article) -> str:
     return f"Заголовок: {article.title}\nИсточник: {article.source}\n\nТекст:\n{text}"
 
 
+def _extract_json(raw: str) -> dict | None:
+    """Достаёт JSON-объект из ответа модели (терпит <think> и текст вокруг)."""
+    cleaned = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
+    for candidate in (cleaned, _first_brace_block(cleaned)):
+        if not candidate:
+            continue
+        try:
+            data = json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(data, dict):
+            return data
+    return None
+
+
+def _first_brace_block(text: str) -> str | None:
+    match = re.search(r"\{.*\}", text, re.DOTALL)
+    return match.group() if match else None
+
+
 def _parse(raw: str) -> RelevanceResult:
     score = 0
     reason = ""
-    try:
-        data = json.loads(raw)
-        if isinstance(data, dict):
+    data = _extract_json(raw)
+    if data is not None:
+        try:
             score = int(data.get("score", 0))
-            reason = str(data.get("reason", ""))
-    except (json.JSONDecodeError, ValueError, TypeError):
-        pass
+        except (ValueError, TypeError):
+            score = 0
+        reason = str(data.get("reason", ""))
     score = max(0, min(10, score))
     return RelevanceResult(score=score, reason=reason)
 

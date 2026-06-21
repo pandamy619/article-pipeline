@@ -13,10 +13,12 @@ class OllamaClient:
         host: str | None = None,
         model: str | None = None,
         timeout: float = 120.0,
+        think: bool = False,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
         self.host = (host or settings.ollama_host).rstrip("/")
         self.model = model or settings.llm_model
+        self.think = think
         self._client = httpx.Client(
             base_url=self.host, timeout=timeout, transport=transport
         )
@@ -29,7 +31,12 @@ class OllamaClient:
         format: str | None = None,
         options: dict | None = None,
     ) -> str:
-        payload: dict = {"model": self.model, "prompt": prompt, "stream": False}
+        payload: dict = {
+            "model": self.model,
+            "prompt": prompt,
+            "stream": False,
+            "think": self.think,
+        }
         if system:
             payload["system"] = system
         if format:
