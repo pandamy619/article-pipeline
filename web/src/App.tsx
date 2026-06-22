@@ -126,6 +126,14 @@ export default function App() {
     );
   }
 
+  // в очереди — показываем по времени публикации (ближайшие сверху)
+  const rows =
+    filter === "scheduled"
+      ? [...articles].sort((a, b) =>
+          (a.scheduled_at ?? "").localeCompare(b.scheduled_at ?? ""),
+        )
+      : articles;
+
   return (
     <div className="app">
       {busy && <div className="working-badge">работаю…</div>}
@@ -252,7 +260,7 @@ export default function App() {
             </tr>
           </thead>
           <tbody>
-            {articles.map((a) => (
+            {rows.map((a) => (
               <Fragment key={a.id}>
                 <tr className="row">
                   <td>
