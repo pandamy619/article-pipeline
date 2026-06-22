@@ -16,15 +16,35 @@ from src.collectors.rss import collect_rss
 from src.config import settings
 
 
+def _interleave(buckets: list[list[Article]]) -> list[Article]:
+    """Round-robin: по одной статье из каждого источника по кругу.
+
+    Чтобы при лимите на прогон в выборку попадали все источники,
+    а не только первый по списку.
+    """
+    out: list[Article] = []
+    i = 0
+    while True:
+        added = False
+        for bucket in buckets:
+            if i < len(bucket):
+                out.append(bucket[i])
+                added = True
+        if not added:
+            break
+        i += 1
+    return out
+
+
 def collect_all(feeds: Iterable[str] | None = None) -> list[Article]:
     limit = settings.max_articles_per_run or None
     rss_feeds = list(feeds) if feeds is not None else settings.rss_feed_list
-    articles: list[Article] = []
+    buckets: list[list[Article]] = []
 
     def _safe(name: str, fn: Callable[[], list[Article]]) -> None:
         try:
             got = fn()
-            articles.extend(got)
+            buckets.append(got)
             print(f"[collect] {name}: {len(got)}", file=sys.stderr)
         except Exception as exc:  # noqa: BLE001 — один источник не должен ронять прогон
             print(f"[collect] {name} FAILED: {exc}", file=sys.stderr)
@@ -49,4 +69,4 @@ def collect_all(feeds: Iterable[str] | None = None) -> list[Article]:
                 limit=settings.reddit_limit,
             ),
         )
-    return articles
+    return _interleave(buckets)
