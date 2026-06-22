@@ -22,6 +22,8 @@ import {
   savePost,
   saveSetting,
   scheduleArticle,
+  type SearchResponse,
+  searchArticles,
   setArticleStatus,
   setToken,
   unscheduleArticle,
@@ -60,6 +62,7 @@ export default function App() {
   const [showFeeds, setShowFeeds] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showChannels, setShowChannels] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
   const [needLogin, setNeedLogin] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [channels, setChannels] = useState<Channel[]>([]);
@@ -194,6 +197,9 @@ export default function App() {
           <button className="btn" onClick={() => setShowChannels((v) => !v)}>
             Каналы
           </button>
+          <button className="btn" onClick={() => setShowSearch((v) => !v)}>
+            Поиск
+          </button>
           <button className="btn" onClick={() => setShowFeeds((v) => !v)}>
             Ленты
           </button>
@@ -233,6 +239,13 @@ export default function App() {
             await loadChannels();
             await refresh(filter, currentChannel);
           }}
+        />
+      )}
+
+      {showSearch && (
+        <SearchPanel
+          channel={currentChannel}
+          onChanged={() => refresh(filter, currentChannel)}
         />
       )}
 
@@ -799,6 +812,117 @@ function LastRunLine({ run }: { run: LastRun }) {
     <div className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
       последний прогон: собрано {run.collected}, добавлено {run.added}, дублей {dups},
       в фильтр {run.filtered}, черновиков {run.drafted} · {when}
+    </div>
+  );
+}
+
+function SearchPanel({
+  channel,
+  onChanged,
+}: {
+  channel: number | null;
+  onChanged: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [res, setRes] = useState<SearchResponse | null>(null);
+
+  async function go(mode: "semantic" | "web") {
+    const q = query.trim();
+    if (!q) return;
+    setBusy(true);
+    setRes(null);
+    try {
+      const r = await searchArticles(q, mode, channel);
+      setRes(r);
+      if (mode === "web") onChanged();
+    } catch (e) {
+      alert(`Ошибка: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card" style={{ padding: "14px 16px", marginBottom: 16 }}>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && query.trim()) go("semantic");
+          }}
+          placeholder="опиши, что искать (напр. туториалы по асинхронному python)"
+          style={{
+            flex: 1,
+            minWidth: 240,
+            border: "1px solid var(--line-strong)",
+            borderRadius: 9,
+            padding: "8px 11px",
+            fontSize: 13,
+            fontFamily: "inherit",
+          }}
+        />
+        <button
+          className="btn"
+          disabled={busy || !query.trim()}
+          onClick={() => go("semantic")}
+        >
+          По собранным
+        </button>
+        <button
+          className="btn btn-primary"
+          disabled={busy || !query.trim()}
+          onClick={() => go("web")}
+        >
+          Найти в вебе
+        </button>
+      </div>
+
+      {busy && (
+        <div className="muted" style={{ fontSize: 12, marginTop: 10 }}>
+          ищу…
+        </div>
+      )}
+
+      {res?.mode === "web" && (
+        <div className="muted" style={{ fontSize: 13, marginTop: 10 }}>
+          Добавлено новых: {res.added}. Запросы: {(res.queries ?? []).join(", ")}.
+          Появятся в списке как черновики текущего канала.
+        </div>
+      )}
+
+      {res?.mode === "semantic" &&
+        ((res.results ?? []).length === 0 ? (
+          <div className="muted" style={{ fontSize: 13, marginTop: 10 }}>
+            Ничего похожего (нужны статьи с эмбеддингами — собери и прогони дедуп).
+          </div>
+        ) : (
+          <table className="tbl" style={{ marginTop: 10 }}>
+            <tbody>
+              {(res.results ?? []).map((r) => (
+                <tr className="row" key={r.id}>
+                  <td className="score" style={{ width: 52 }}>
+                    {r.similarity.toFixed(2)}
+                  </td>
+                  <td>
+                    <a className="title" href={r.url} target="_blank" rel="noreferrer">
+                      {r.title}
+                    </a>
+                  </td>
+                  <td className="muted" style={{ width: 130 }}>
+                    {STATUS_RU[r.status] ?? r.status}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ))}
+
+      <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+        «По собранным» — семантический поиск среди уже собранного. «Найти в вебе» —
+        LLM придумает запросы, SearXNG принесёт новые статьи в текущий канал.
+      </div>
     </div>
   );
 }

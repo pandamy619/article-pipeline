@@ -205,6 +205,36 @@ export async function deleteFeed(id: number): Promise<void> {
   if (!r.ok) throw new Error(`delete feed: HTTP ${r.status}`);
 }
 
+export interface SearchResult {
+  id: number;
+  title: string;
+  url: string;
+  status: string;
+  channel_id: number | null;
+  similarity: number;
+}
+
+export interface SearchResponse {
+  mode: string;
+  results?: SearchResult[];
+  added?: number;
+  queries?: string[];
+}
+
+export async function searchArticles(
+  query: string,
+  mode: "semantic" | "web",
+  channel: number | null,
+): Promise<SearchResponse> {
+  const r = await req("/api/search", {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ query, mode, channel_id: channel }),
+  });
+  if (!r.ok) throw new Error(`search: HTTP ${r.status}`);
+  return r.json();
+}
+
 export interface ChatMsg {
   role: "user" | "assistant";
   content: string;
