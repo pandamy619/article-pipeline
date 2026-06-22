@@ -19,7 +19,7 @@ from src.feeds import service as feeds_service
 from src.llm.client import OllamaClient
 from src.moderation import service
 from src.moderation.keyboards import review_keyboard
-from src.pipeline import PipelineResult, run_pipeline
+from src.pipeline import PipelineResult, run_all_channels
 from src.publisher.telegram import publish
 
 router = Router()
@@ -168,7 +168,7 @@ async def _scheduled_run(bot: Bot) -> None:
 
         with get_session() as session:
             apply_overrides(session)
-            return run_pipeline(session, OllamaClient())
+            return run_all_channels(session, OllamaClient())
 
     try:
         result = await asyncio.to_thread(_process)

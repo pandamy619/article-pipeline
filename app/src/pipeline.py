@@ -1,19 +1,19 @@
-"""Оркестрация одного прогона: сбор -> сохранение -> фильтр -> рерайт."""
+"""Оркестрация прогона на канал: сбор -> дедуп -> фильтр -> рерайт."""
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
+from src.channels.service import ensure_default_channel, list_channels
 from src.collectors.base import Article
-from src.collectors.sources import collect_all
+from src.collectors.sources import collect_for_channel
 from src.config import settings
-from src.db.models import RunLog
+from src.db.models import Channel, RunLog
 from src.db.repo import save_articles
 from src.dedup.semantic import DedupResult, apply_semantic_dedup
-from src.feeds.service import effective_feeds
 from src.filter.relevance import Scorer
 from src.filter.service import apply_relevance_filter
 from src.rewrite.service import apply_rewrite
@@ -30,29 +30,35 @@ class PipelineResult:
     drafted: int
 
 
-def _default_collector(feeds: Iterable[str]) -> list[Article]:
-    return collect_all(feeds)
-
-
 def run_pipeline(
     session: Session,
     llm_client: Scorer,
+    channel: Channel,
     *,
-    collector: Callable[[Iterable[str]], list[Article]] = _default_collector,
-    feeds: list[str] | None = None,
+    collector: Callable[[Channel], list[Article]] | None = None,
 ) -> PipelineResult:
-    """Один полный прогон: RSS -> дедуп -> фильтр релевантности -> рерайт в черновики."""
-    feeds = feeds if feeds is not None else effective_feeds(session)
-    articles = list(collector(feeds))
+    """Полный прогон одного канала: сбор -> дедуп -> фильтр -> рерайт в черновики."""
+    if collector is None:
+        articles = collect_for_channel(channel)
+    else:
+        articles = list(collector(channel))
     if settings.max_articles_per_run:
         articles = articles[: settings.max_articles_per_run]
-    saved = save_articles(session, articles)
+
+    saved = save_articles(session, articles, channel_id=channel.id)
     if settings.semantic_dedup_enabled:
-        deduped = apply_semantic_dedup(session, llm_client)
+        deduped = apply_semantic_dedup(session, llm_client, channel_id=channel.id)
     else:
         deduped = DedupResult(checked=0, duplicates=0)
-    filtered = apply_relevance_filter(session, llm_client)
-    rewritten = apply_rewrite(session, llm_client)
+    filtered = apply_relevance_filter(
+        session,
+        llm_client,
+        topic=channel.topic,
+        threshold=channel.relevance_threshold,
+        channel_id=channel.id,
+    )
+    rewritten = apply_rewrite(session, llm_client, channel_id=channel.id)
+
     result = PipelineResult(
         collected=len(articles),
         added=saved.added,
@@ -76,3 +82,23 @@ def run_pipeline(
     )
     session.flush()
     return result
+
+
+def run_all_channels(session: Session, llm_client: Scorer) -> PipelineResult:
+    """Прогоняет все включённые каналы, возвращает суммарный результат."""
+    ensure_default_channel(session)
+    total = PipelineResult(0, 0, 0, 0, 0, 0, 0)
+    for channel in list_channels(session):
+        if not channel.enabled:
+            continue
+        r = run_pipeline(session, llm_client, channel)
+        total = PipelineResult(
+            collected=total.collected + r.collected,
+            added=total.added + r.added,
+            duplicates=total.duplicates + r.duplicates,
+            semantic_duplicates=total.semantic_duplicates + r.semantic_duplicates,
+            filtered=total.filtered + r.filtered,
+            rejected=total.rejected + r.rejected,
+            drafted=total.drafted + r.drafted,
+        )
+    return total

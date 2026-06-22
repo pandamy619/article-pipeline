@@ -20,13 +20,19 @@ class FilterResult:
 
 
 def apply_relevance_filter(
-    session: Session, client: Scorer, *, threshold: int | None = None
+    session: Session,
+    client: Scorer,
+    *,
+    topic: str | None = None,
+    threshold: int | None = None,
+    channel_id: int | None = None,
 ) -> FilterResult:
     """Оценивает все статьи со статусом new и проставляет filtered/rejected."""
     t = settings.relevance_threshold if threshold is None else threshold
-    records = session.scalars(
-        select(ArticleRecord).where(ArticleRecord.status == ArticleStatus.new)
-    ).all()
+    stmt = select(ArticleRecord).where(ArticleRecord.status == ArticleStatus.new)
+    if channel_id is not None:
+        stmt = stmt.where(ArticleRecord.channel_id == channel_id)
+    records = session.scalars(stmt).all()
 
     filtered = 0
     rejected = 0
@@ -38,7 +44,7 @@ def apply_relevance_filter(
             source=rec.source,
             published_at=rec.published_at,
         )
-        res = score_relevance(art, client=client)
+        res = score_relevance(art, client=client, topic=topic)
         rec.relevance_score = res.score
         rec.relevance_reason = res.reason
         if res.score >= t:

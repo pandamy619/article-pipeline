@@ -425,10 +425,10 @@ def last_run() -> dict[str, object]:
 async def collect_now() -> dict[str, bool]:
     def _run() -> None:
         from src.llm.client import OllamaClient
-        from src.pipeline import run_pipeline
+        from src.pipeline import run_all_channels
 
         with get_session() as session:
-            run_pipeline(session, OllamaClient())
+            run_all_channels(session, OllamaClient())
 
     await asyncio.to_thread(_run)
     return {"ok": True}

@@ -43,16 +43,18 @@ def _embed_input(rec: ArticleRecord) -> str:
     return f"{rec.title}\n\n{rec.text}".strip()
 
 
-def _load_refs(session: Session, window: int) -> list[tuple[str, list[float]]]:
+def _load_refs(
+    session: Session, window: int, channel_id: int | None = None
+) -> list[tuple[str, list[float]]]:
     """Эталоны: ранее принятые (не rejected) статьи с эмбеддингом."""
+    stmt = select(ArticleRecord).where(
+        ArticleRecord.embedding.is_not(None),
+        ArticleRecord.status != ArticleStatus.rejected,
+    )
+    if channel_id is not None:
+        stmt = stmt.where(ArticleRecord.channel_id == channel_id)
     rows = session.scalars(
-        select(ArticleRecord)
-        .where(
-            ArticleRecord.embedding.is_not(None),
-            ArticleRecord.status != ArticleStatus.rejected,
-        )
-        .order_by(ArticleRecord.id.desc())
-        .limit(window)
+        stmt.order_by(ArticleRecord.id.desc()).limit(window)
     ).all()
     refs: list[tuple[str, list[float]]] = []
     for r in rows:
@@ -69,6 +71,7 @@ def apply_semantic_dedup(
     *,
     threshold: float | None = None,
     window: int | None = None,
+    channel_id: int | None = None,
 ) -> DedupResult:
     """Новые статьи сравниваем с ранее принятыми по косинусной близости.
 
@@ -79,10 +82,11 @@ def apply_semantic_dedup(
     thr = settings.semantic_dedup_threshold if threshold is None else threshold
     win = settings.semantic_dedup_window if window is None else window
 
-    refs = _load_refs(session, win)
-    new_records = session.scalars(
-        select(ArticleRecord).where(ArticleRecord.status == ArticleStatus.new)
-    ).all()
+    refs = _load_refs(session, win, channel_id)
+    nr_stmt = select(ArticleRecord).where(ArticleRecord.status == ArticleStatus.new)
+    if channel_id is not None:
+        nr_stmt = nr_stmt.where(ArticleRecord.channel_id == channel_id)
+    new_records = session.scalars(nr_stmt).all()
 
     checked = 0
     duplicates = 0

@@ -11,10 +11,11 @@ from src.collectors.base import Article
 from src.config import settings
 
 
-def _system_prompt() -> str:
+def _system_prompt(topic: str | None = None) -> str:
+    topic = topic or settings.channel_topic
     return (
         "Ты — редактор Telegram-канала. Тематика канала: "
-        f"{settings.channel_topic}. "
+        f"{topic}. "
         "Оцени пользу статьи для аудитории по шкале 0–10.\n"
         "7–10 — полезное и обучающее: туториалы, разбор основ, гайды, how-to, "
         "объяснения концепций, практические подборки инструментов и сервисов "
@@ -78,8 +79,12 @@ def _parse(raw: str) -> RelevanceResult:
     return RelevanceResult(score=score, reason=reason)
 
 
-def score_relevance(article: Article, *, client: Scorer) -> RelevanceResult:
-    raw = client.generate(build_prompt(article), system=_system_prompt(), format="json")
+def score_relevance(
+    article: Article, *, client: Scorer, topic: str | None = None
+) -> RelevanceResult:
+    raw = client.generate(
+        build_prompt(article), system=_system_prompt(topic), format="json"
+    )
     return _parse(raw)
 
 

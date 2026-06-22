@@ -25,7 +25,9 @@ class SaveResult:
     duplicates: int
 
 
-def save_articles(session: Session, articles: Iterable[Article]) -> SaveResult:
+def save_articles(
+    session: Session, articles: Iterable[Article], *, channel_id: int | None = None
+) -> SaveResult:
     """Сохраняет новые статьи, пропуская дубли по URL и по хешу контента."""
     added = 0
     duplicates = 0
@@ -51,6 +53,7 @@ def save_articles(session: Session, articles: Iterable[Article]) -> SaveResult:
 
         session.add(
             ArticleRecord(
+                channel_id=channel_id,
                 url=art.url,
                 content_hash=h,
                 title=art.title,

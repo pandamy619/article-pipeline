@@ -18,10 +18,16 @@ class RewriteResult:
 
 
 def apply_rewrite(
-    session: Session, client: Generator, *, limit: int | None = None
+    session: Session,
+    client: Generator,
+    *,
+    channel_id: int | None = None,
+    limit: int | None = None,
 ) -> RewriteResult:
     """Генерит пост для каждой статьи filtered и переводит её в drafted."""
     stmt = select(ArticleRecord).where(ArticleRecord.status == ArticleStatus.filtered)
+    if channel_id is not None:
+        stmt = stmt.where(ArticleRecord.channel_id == channel_id)
     if limit:
         stmt = stmt.limit(limit)
     records = session.scalars(stmt).all()
