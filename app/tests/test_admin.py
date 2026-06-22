@@ -71,6 +71,19 @@ def test_set_status(client):
     s.close()
 
 
+def test_published_status_locked(client):
+    s = db_base.SessionLocal()
+    s.get(ArticleRecord, 1).status = ArticleStatus.published
+    s.commit()
+    s.close()
+    assert client.post("/api/articles/1/status", json={"status": "new"}).json() == {
+        "ok": False
+    }
+    s = db_base.SessionLocal()
+    assert s.get(ArticleRecord, 1).status == ArticleStatus.published
+    s.close()
+
+
 def test_save_post(client):
     client.post("/api/articles/1/post", json={"text": "новый пост"})
     s = db_base.SessionLocal()

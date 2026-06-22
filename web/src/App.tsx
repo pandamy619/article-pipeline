@@ -120,8 +120,12 @@ export default function App() {
                     <select
                       className={`select st-${a.status}`}
                       value={a.status}
-                      disabled={busy}
-                      title="сменить статус вручную"
+                      disabled={busy || a.status === "published"}
+                      title={
+                        a.status === "published"
+                          ? "опубликованную статью менять нельзя"
+                          : "сменить статус вручную"
+                      }
                       onChange={(e) => run(() => setArticleStatus(a.id, e.target.value))}
                     >
                       {STATUSES.map((s) => (
@@ -167,18 +171,20 @@ export default function App() {
                           >
                             ✏️
                           </button>
-                          <button
-                            className="icon"
-                            title="опубликовать в канал"
-                            disabled={busy}
-                            onClick={() => {
-                              if (confirm("Опубликовать пост в Telegram-канал?")) {
-                                run(() => runAction(a.id, "publish"));
-                              }
-                            }}
-                          >
-                            🚀
-                          </button>
+                          {a.status !== "published" && (
+                            <button
+                              className="icon"
+                              title="опубликовать в канал"
+                              disabled={busy}
+                              onClick={() => {
+                                if (confirm("Опубликовать пост в Telegram-канал?")) {
+                                  run(() => runAction(a.id, "publish"));
+                                }
+                              }}
+                            >
+                              🚀
+                            </button>
+                          )}
                         </>
                       ) : (
                         <button

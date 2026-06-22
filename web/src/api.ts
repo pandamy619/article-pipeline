@@ -27,6 +27,10 @@ export async function setArticleStatus(id: number, status: string): Promise<void
     body: JSON.stringify({ status }),
   });
   if (!r.ok) throw new Error(`status: HTTP ${r.status}`);
+  const data = await r.json().catch(() => ({}));
+  if (data && data.ok === false) {
+    throw new Error("статус изменить нельзя (опубликованная статья)");
+  }
 }
 
 export async function collect(): Promise<void> {

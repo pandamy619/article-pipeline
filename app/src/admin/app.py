@@ -91,8 +91,11 @@ def set_status(article_id: int, body: StatusIn) -> dict[str, bool]:
         return {"ok": False}
     with get_session() as session:
         rec = session.get(ArticleRecord, article_id)
-        if rec:
-            rec.status = new_status
+        if rec is None:
+            return {"ok": False}
+        if rec.status == ArticleStatus.published:
+            return {"ok": False}  # опубликованную статью менять нельзя
+        rec.status = new_status
     return {"ok": True}
 
 
