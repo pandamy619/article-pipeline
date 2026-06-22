@@ -107,23 +107,31 @@ export default function App() {
                 </td>
                 <td style={td}>{a.source}</td>
                 <td style={{ ...td, whiteSpace: "nowrap" }}>
-                  {a.post_text && (
-                    <button onClick={() => openPanel(a.id, "preview")} title="превью">
-                      📄
+                  {a.post_text ? (
+                    <>
+                      <button onClick={() => openPanel(a.id, "preview")} title="превью">
+                        📄
+                      </button>
+                      <button onClick={() => openPanel(a.id, "edit")} title="редактировать">
+                        ✏️
+                      </button>
+                      <button
+                        disabled={busy}
+                        title="опубликовать"
+                        onClick={() => run(() => runAction(a.id, "publish"))}
+                      >
+                        ✅
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      disabled={busy}
+                      title="сделать пост"
+                      onClick={() => run(() => runAction(a.id, "draft"))}
+                    >
+                      ✍
                     </button>
                   )}
-                  {a.post_text && (
-                    <button onClick={() => openPanel(a.id, "edit")} title="редактировать">
-                      ✏️
-                    </button>
-                  )}
-                  <button
-                    disabled={busy}
-                    title="опубликовать"
-                    onClick={() => run(() => runAction(a.id, "publish"))}
-                  >
-                    ✅
-                  </button>
                   <button
                     disabled={busy}
                     title="отклонить"
