@@ -11,7 +11,7 @@ from sqlalchemy import func, select
 
 from src.config import settings
 from src.db.base import get_session
-from src.db.models import ArticleRecord, ArticleStatus
+from src.db.models import ArticleRecord, ArticleStatus, RunLog
 from src.feeds import service as feeds_service
 from src.log import setup_logging
 
@@ -275,6 +275,27 @@ def delete_feed_api(feed_id: int) -> dict[str, bool]:
     with get_session() as session:
         ok = feeds_service.remove_feed(session, feed_id)
     return {"ok": ok}
+
+
+@app.get("/api/last-run")
+def last_run() -> dict[str, object]:
+    with get_session() as session:
+        rec = session.scalar(select(RunLog).order_by(RunLog.id.desc()))
+        if not rec:
+            return {"exists": False}
+        return {
+            "exists": True,
+            "created_at": rec.created_at.isoformat(),
+            "ok": rec.ok,
+            "error": rec.error,
+            "collected": rec.collected,
+            "added": rec.added,
+            "duplicates": rec.duplicates,
+            "semantic_duplicates": rec.semantic_duplicates,
+            "filtered": rec.filtered,
+            "rejected": rec.rejected,
+            "drafted": rec.drafted,
+        }
 
 
 @app.post("/api/collect")

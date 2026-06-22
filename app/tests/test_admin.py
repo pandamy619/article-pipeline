@@ -6,7 +6,7 @@ from sqlalchemy.pool import StaticPool
 
 import src.db.base as db_base
 from src.admin.app import app
-from src.db.models import ArticleRecord, ArticleStatus, Base
+from src.db.models import ArticleRecord, ArticleStatus, Base, RunLog
 
 
 @pytest.fixture()
@@ -124,6 +124,21 @@ def test_feeds_api_add_list_delete(client):
     assert client.delete(f"/api/feeds/{fid}").json() == {"ok": True}
     feeds2 = client.get("/api/feeds").json()
     assert not any(f["url"] == "https://x.com/feed" for f in feeds2)
+
+
+def test_last_run_empty(client):
+    assert client.get("/api/last-run").json() == {"exists": False}
+
+
+def test_last_run_reports_metrics(client):
+    s = db_base.SessionLocal()
+    s.add(RunLog(collected=5, added=3, drafted=2, ok=True))
+    s.commit()
+    s.close()
+    data = client.get("/api/last-run").json()
+    assert data["exists"] is True
+    assert data["drafted"] == 2
+    assert data["ok"] is True
 
 
 def test_chat(client, monkeypatch):

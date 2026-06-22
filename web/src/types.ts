@@ -18,6 +18,20 @@ export interface Feed {
   source: string;
 }
 
+export interface LastRun {
+  exists: boolean;
+  created_at?: string;
+  ok?: boolean;
+  error?: string | null;
+  collected?: number;
+  added?: number;
+  duplicates?: number;
+  semantic_duplicates?: number;
+  filtered?: number;
+  rejected?: number;
+  drafted?: number;
+}
+
 export type Stats = Record<string, number>;
 
 export type ArticleAction = "draft" | "publish" | "reject";

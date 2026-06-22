@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.filters import Command, CommandObject
@@ -13,6 +14,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from src.config import settings
 from src.db.base import get_session
+from src.db.models import RunLog
 from src.feeds import service as feeds_service
 from src.llm.client import OllamaClient
 from src.moderation import service
@@ -21,6 +23,7 @@ from src.pipeline import PipelineResult, run_pipeline
 from src.publisher.telegram import publish
 
 router = Router()
+log = logging.getLogger(__name__)
 
 
 class EditState(StatesGroup):
@@ -165,7 +168,19 @@ async def _scheduled_run(bot: Bot) -> None:
         with get_session() as session:
             return run_pipeline(session, client)
 
-    await asyncio.to_thread(_process)
+    try:
+        result = await asyncio.to_thread(_process)
+    except Exception as exc:  # noqa: BLE001 — мониторинг: логируем и зовём админа
+        log.exception("scheduled run failed")
+        with get_session() as session:
+            session.add(RunLog(ok=False, error=str(exc)[:500]))
+        try:
+            await bot.send_message(_admin_id(), f"⚠️ Прогон пайплайна упал:\n{exc}")
+        except Exception:  # noqa: BLE001
+            log.exception("failed to notify admin about run failure")
+        return
+
+    log.info("scheduled run ok: %s", result)
     sent = await send_drafts(bot)
     if sent:
         await bot.send_message(_admin_id(), f"Новых черновиков на модерацию: {sent}")

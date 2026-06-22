@@ -68,3 +68,23 @@ class Feed(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow
     )
+
+
+class RunLog(Base):
+    """Итоги одного прогона пайплайна — для метрик и мониторинга ошибок."""
+
+    __tablename__ = "run_log"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow
+    )
+    collected: Mapped[int] = mapped_column(Integer, default=0)
+    added: Mapped[int] = mapped_column(Integer, default=0)
+    duplicates: Mapped[int] = mapped_column(Integer, default=0)
+    semantic_duplicates: Mapped[int] = mapped_column(Integer, default=0)
+    filtered: Mapped[int] = mapped_column(Integer, default=0)
+    rejected: Mapped[int] = mapped_column(Integer, default=0)
+    drafted: Mapped[int] = mapped_column(Integer, default=0)
+    ok: Mapped[bool] = mapped_column(Boolean, default=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)

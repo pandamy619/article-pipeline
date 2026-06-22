@@ -1,7 +1,12 @@
-import type { Article, ArticleAction, Feed, Stats } from "./types";
+import type { Article, ArticleAction, Feed, LastRun, Stats } from "./types";
 
 export async function fetchStats(): Promise<Stats> {
   const r = await fetch("/api/stats");
+  return r.json();
+}
+
+export async function fetchLastRun(): Promise<LastRun> {
+  const r = await fetch("/api/last-run");
   return r.json();
 }
 

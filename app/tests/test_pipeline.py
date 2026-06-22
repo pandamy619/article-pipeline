@@ -1,5 +1,5 @@
 from src.collectors.base import Article
-from src.db.models import ArticleRecord, ArticleStatus
+from src.db.models import ArticleRecord, ArticleStatus, RunLog
 from src.pipeline import run_pipeline
 
 
@@ -54,3 +54,12 @@ def test_run_pipeline_dedup_on_second_run(session):
     assert result.added == 0
     assert result.duplicates == 2
     assert result.drafted == 0
+
+
+def test_run_pipeline_writes_run_log(session):
+    run_pipeline(session, FakeLLM(), collector=fake_collector, feeds=[])
+    logs = session.query(RunLog).all()
+    assert len(logs) == 1
+    assert logs[0].ok is True
+    assert logs[0].drafted == 2
+    assert logs[0].collected == 2

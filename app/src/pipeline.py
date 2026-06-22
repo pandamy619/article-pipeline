@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from src.collectors.base import Article
 from src.collectors.sources import collect_all
 from src.config import settings
+from src.db.models import RunLog
 from src.db.repo import save_articles
 from src.dedup.semantic import DedupResult, apply_semantic_dedup
 from src.feeds.service import effective_feeds
@@ -52,7 +53,7 @@ def run_pipeline(
         deduped = DedupResult(checked=0, duplicates=0)
     filtered = apply_relevance_filter(session, llm_client)
     rewritten = apply_rewrite(session, llm_client)
-    return PipelineResult(
+    result = PipelineResult(
         collected=len(articles),
         added=saved.added,
         duplicates=saved.duplicates,
@@ -61,3 +62,17 @@ def run_pipeline(
         rejected=filtered.rejected,
         drafted=rewritten.drafted,
     )
+    session.add(
+        RunLog(
+            collected=result.collected,
+            added=result.added,
+            duplicates=result.duplicates,
+            semantic_duplicates=result.semantic_duplicates,
+            filtered=result.filtered,
+            rejected=result.rejected,
+            drafted=result.drafted,
+            ok=True,
+        )
+    )
+    session.flush()
+    return result

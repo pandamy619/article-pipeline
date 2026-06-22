@@ -7,12 +7,13 @@ import {
   deleteFeed,
   fetchArticles,
   fetchFeeds,
+  fetchLastRun,
   fetchStats,
   runAction,
   savePost,
   setArticleStatus,
 } from "./api";
-import type { Article, Feed, Stats } from "./types";
+import type { Article, Feed, LastRun, Stats } from "./types";
 
 const STATUSES = ["new", "filtered", "drafted", "pending", "published", "rejected"];
 const STATUS_RU: Record<string, string> = {
@@ -28,6 +29,7 @@ type Mode = "preview" | "edit";
 export default function App() {
   const [articles, setArticles] = useState<Article[]>([]);
   const [stats, setStats] = useState<Stats>({});
+  const [lastRun, setLastRun] = useState<LastRun | null>(null);
   const [filter, setFilter] = useState("");
   const [busy, setBusy] = useState(false);
   const [openId, setOpenId] = useState<number | null>(null);
@@ -35,12 +37,14 @@ export default function App() {
   const [showFeeds, setShowFeeds] = useState(false);
 
   async function refresh(current: string) {
-    const [a, s] = await Promise.all([
+    const [a, s, lr] = await Promise.all([
       fetchArticles(current || undefined),
       fetchStats(),
+      fetchLastRun(),
     ]);
     setArticles(a);
     setStats(s);
+    setLastRun(lr);
   }
 
   useEffect(() => {
@@ -91,6 +95,8 @@ export default function App() {
       </header>
 
       {showFeeds && <FeedsPanel />}
+
+      {lastRun?.exists && <LastRunLine run={lastRun} />}
 
       <nav className="chips">
         <button
@@ -391,6 +397,24 @@ function linkify(text: string) {
     }
     return <span key={i}>{part}</span>;
   });
+}
+
+function LastRunLine({ run }: { run: LastRun }) {
+  const when = run.created_at ? new Date(run.created_at).toLocaleString() : "";
+  if (run.ok === false) {
+    return (
+      <div style={{ fontSize: 12, marginBottom: 12, color: "#c02626" }}>
+        ⚠️ последний прогон упал{run.error ? `: ${run.error}` : ""} · {when}
+      </div>
+    );
+  }
+  const dups = (run.duplicates ?? 0) + (run.semantic_duplicates ?? 0);
+  return (
+    <div className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
+      последний прогон: собрано {run.collected}, добавлено {run.added}, дублей {dups},
+      в фильтр {run.filtered}, черновиков {run.drafted} · {when}
+    </div>
+  );
 }
 
 function FeedsPanel() {
