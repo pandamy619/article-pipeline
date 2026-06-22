@@ -1,6 +1,8 @@
 # article-pipeline
 
-Пайплайн поиска статей и публикации их в Telegram-группу с использованием **локальной нейросети**. Поиск и рерайт делает локальная LLM (Qwen3 через Ollama), перед публикацией каждый пост проходит **проверку человеком**.
+[![CI](https://github.com/pandamy619/article-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/pandamy619/article-pipeline/actions/workflows/ci.yml)
+
+Пайплайн поиска статей и публикации их в Telegram-канал с использованием **локальной нейросети**. Поиск и рерайт делает локальная LLM (Qwen3 через Ollama), перед публикацией каждый пост проходит **проверку человеком**.
 
 ## Возможности
 
