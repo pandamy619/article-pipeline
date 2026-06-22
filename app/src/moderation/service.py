@@ -28,9 +28,11 @@ def parse_callback(data: str) -> tuple[str, int] | None:
 
 
 def get_drafts(
-    session: Session, *, limit: int | None = None
+    session: Session, *, channel_id: int | None = None, limit: int | None = None
 ) -> Sequence[ArticleRecord]:
     stmt = select(ArticleRecord).where(ArticleRecord.status == ArticleStatus.drafted)
+    if channel_id is not None:
+        stmt = stmt.where(ArticleRecord.channel_id == channel_id)
     if limit:
         stmt = stmt.limit(limit)
     return session.scalars(stmt).all()

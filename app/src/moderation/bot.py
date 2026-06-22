@@ -12,6 +12,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
+from src.channels.service import ensure_default_channel, get_channel, list_channels
 from src.config import settings
 from src.db.base import get_session
 from src.db.models import ArticleRecord, RunLog
@@ -30,30 +31,68 @@ class EditState(StatesGroup):
     waiting_text = State()
 
 
-def _admin_id() -> int:
-    return int(settings.admin_user_id)
+def _to_admin_id(raw: str) -> int | None:
+    return int(raw) if raw and raw.lstrip("-").isdigit() else None
 
 
-async def send_drafts(bot: Bot) -> int:
-    """Шлёт админу все черновики с кнопками, помечает их pending."""
-    sent = 0
+def _admin_id() -> int | None:
+    return _to_admin_id(settings.admin_user_id)
+
+
+def _admin_id_for(channel) -> int | None:
+    raw = channel.admin_user_id if channel and channel.admin_user_id else ""
+    return _to_admin_id(raw) or _admin_id()
+
+
+async def _notify_admin(text: str) -> None:
+    admin = _admin_id()
+    if not admin or not settings.telegram_bot_token:
+        return
+    bot = Bot(settings.telegram_bot_token)
+    try:
+        await bot.send_message(admin, text)
+    except Exception:  # noqa: BLE001
+        log.exception("notify admin failed")
+    finally:
+        await bot.session.close()
+
+
+async def send_drafts_all() -> int:
+    """Каждому каналу — его черновики его админу через его бота."""
     with get_session() as session:
-        for rec in service.get_drafts(session):
-            await bot.send_message(
-                _admin_id(),
-                rec.post_text or "(пустой пост)",
-                reply_markup=review_keyboard(rec.id),
-            )
-            service.mark_pending(session, rec.id)
-            sent += 1
+        channels = [
+            (c.id, c.bot_token, _admin_id_for(c))
+            for c in list_channels(session)
+            if c.bot_token
+        ]
+    sent = 0
+    for cid, token, admin in channels:
+        if not admin:
+            continue
+        with get_session() as session:
+            drafts = [
+                (d.id, d.post_text or "(пустой пост)")
+                for d in service.get_drafts(session, channel_id=cid)
+            ]
+        if not drafts:
+            continue
+        bot = Bot(token)
+        try:
+            for aid, post in drafts:
+                await bot.send_message(admin, post, reply_markup=review_keyboard(aid))
+                with get_session() as session:
+                    service.mark_pending(session, aid)
+                sent += 1
+        finally:
+            await bot.session.close()
     return sent
 
 
 @router.message(Command("review"))
-async def cmd_review(message: Message, bot: Bot) -> None:
+async def cmd_review(message: Message) -> None:
     if message.from_user and message.from_user.id != _admin_id():
         return
-    n = await send_drafts(bot)
+    n = await send_drafts_all()
     await message.answer(f"На модерацию отправлено: {n}")
 
 
@@ -131,13 +170,16 @@ async def on_action(query: CallbackQuery, bot: Bot, state: FSMContext) -> None:
         with get_session() as session:
             post = service.get_post_text(session, article_id)
             image = service.get_image(session, article_id)
+            rec = session.get(ArticleRecord, article_id)
+            ch = get_channel(session, rec.channel_id) if rec and rec.channel_id else None
+            chat = (
+                ch.channel_id if ch and ch.channel_id else settings.telegram_channel_id
+            )
         if not post:
             await query.answer("Пост пуст")
             return
         try:
-            message_id = await publish(
-                bot, settings.telegram_channel_id, post, image_url=image
-            )
+            message_id = await publish(bot, chat, post, image_url=image)
         except Exception:
             await query.answer("Ошибка публикации")
             return
@@ -160,8 +202,8 @@ async def on_edit_text(message: Message, state: FSMContext) -> None:
     await message.answer(new_text, reply_markup=review_keyboard(article_id))
 
 
-async def _scheduled_run(bot: Bot) -> None:
-    """Гоняет пайплайн в отдельном потоке и шлёт новые черновики на модерацию."""
+async def _scheduled_run() -> None:
+    """Гоняет пайплайн и рассылает новые черновики по каналам на модерацию."""
 
     def _process() -> PipelineResult:
         from src.settings_store import apply_overrides
@@ -176,19 +218,14 @@ async def _scheduled_run(bot: Bot) -> None:
         log.exception("scheduled run failed")
         with get_session() as session:
             session.add(RunLog(ok=False, error=str(exc)[:500]))
-        try:
-            await bot.send_message(_admin_id(), f"⚠️ Прогон пайплайна упал:\n{exc}")
-        except Exception:  # noqa: BLE001
-            log.exception("failed to notify admin about run failure")
+        await _notify_admin(f"⚠️ Прогон пайплайна упал:\n{exc}")
         return
 
     log.info("scheduled run ok: %s", result)
-    sent = await send_drafts(bot)
-    if sent:
-        await bot.send_message(_admin_id(), f"Новых черновиков на модерацию: {sent}")
+    await send_drafts_all()
 
 
-async def _publish_due(bot: Bot) -> None:
+async def _publish_due() -> None:
     """Публикует статьи из очереди, у которых подошло время (через бот канала)."""
     from src.channels.service import get_channel
     from src.publisher.queue import due_article_ids
@@ -231,21 +268,33 @@ def build_dispatcher() -> Dispatcher:
 
 
 async def run() -> None:
-    bot = Bot(settings.telegram_bot_token)
+    with get_session() as session:
+        ensure_default_channel(session)
+        tokens: list[str] = []
+        for c in list_channels(session):
+            if c.enabled and c.bot_token and c.bot_token not in tokens:
+                tokens.append(c.bot_token)
+    if not tokens and settings.telegram_bot_token:
+        tokens = [settings.telegram_bot_token]
+
     scheduler = AsyncIOScheduler()
-    scheduler.add_job(
-        _scheduled_run,
-        "interval",
-        minutes=settings.run_interval_minutes,
-        args=[bot],
-    )
-    scheduler.add_job(_publish_due, "interval", minutes=1, args=[bot])
+    scheduler.add_job(_scheduled_run, "interval", minutes=settings.run_interval_minutes)
+    scheduler.add_job(_publish_due, "interval", minutes=1)
     scheduler.start()
     log.info(
-        "scheduler started: pipeline every %s min, publish-due every 1 min",
+        "scheduler started: pipeline every %s min, publish-due every 1 min; "
+        "moderation bots: %d",
         settings.run_interval_minutes,
+        len(tokens),
     )
-    await build_dispatcher().start_polling(bot)
+
+    if not tokens:
+        log.warning("no bot tokens configured — only scheduler runs")
+        while True:
+            await asyncio.sleep(3600)
+
+    bots = [Bot(t) for t in tokens]
+    await build_dispatcher().start_polling(*bots)
 
 
 if __name__ == "__main__":
