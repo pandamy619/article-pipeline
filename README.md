@@ -37,7 +37,8 @@ cp deploy/.env.example deploy/.env   # заполни ключи (см. комм
 docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml up postgres valkey searxng app
 ```
 
-**Прод (Windows + RTX 4080):** всё в Docker, Ollama с GPU.
+**Прод (Windows + RTX 4080):** всё в Docker, Ollama с GPU. Подробный runbook —
+[docs/deploy-windows.md](docs/deploy-windows.md).
 
 ```bash
 cp deploy/.env.example deploy/.env   # заполнить токены и SEARXNG_SECRET

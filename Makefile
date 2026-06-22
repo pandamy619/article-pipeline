@@ -1,7 +1,10 @@
-# Команды для разработки (Mac). Прод на Windows — см. README.
+# Команды для разработки (Mac). Прод на Windows — см. docs/deploy-windows.md
 COMPOSE = docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml
+# Прод (Windows + GPU): без dev-оверрайда, с профилем gpu (ollama в контейнере)
+PROD = docker compose -f deploy/docker-compose.yml --profile gpu
 
-.PHONY: up down logs ps collect migrate reset reset-all clean test
+.PHONY: up down logs ps collect migrate reset reset-all clean test \
+        prod-up prod-down prod-logs prod-ps prod-collect
 
 # поднять весь стек (dev; Ollama — нативная, не в Docker)
 up:
@@ -42,3 +45,21 @@ clean:
 # тесты + линтер
 test:
 	cd app && poetry run pytest -q && poetry run ruff check .
+
+# --- Прод (Windows + GPU) ---
+# поднять весь стек с GPU-Ollama (модели подтянутся автоматически при первом запуске)
+prod-up:
+	$(PROD) up -d --build
+
+prod-down:
+	$(PROD) down
+
+prod-logs:
+	$(PROD) logs -f
+
+prod-ps:
+	$(PROD) ps
+
+# разовый прогон пайплайна на проде
+prod-collect:
+	$(PROD) exec app python -m src collect

@@ -20,13 +20,18 @@ services:
               capabilities: [gpu]
     restart: unless-stopped
 
-  # Разовая загрузка моделей при первом запуске (профиль gpu)
+  # Разовая загрузка моделей при первом запуске (профиль gpu).
+  # Тянет именно те модели, что заданы в .env (LLM_MODEL/EMBED_MODEL).
   ollama-pull:
     image: ollama/ollama:latest
     profiles: ["gpu"]
     depends_on: [ollama]
+    env_file: .env
     environment: ["OLLAMA_HOST=ollama:11434"]
-    entrypoint: ["sh", "-c", "sleep 5 && ollama pull qwen3:14b && ollama pull bge-m3"]
+    entrypoint:
+      - sh
+      - -c
+      - sleep 5 && ollama pull "$${LLM_MODEL:-qwen3:14b}" && ollama pull "$${EMBED_MODEL:-bge-m3}"
     restart: "no"
 
   postgres:
