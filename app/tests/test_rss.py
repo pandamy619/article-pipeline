@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from src.collectors.rss import collect_rss
+from src.collectors.rss import _og_image, collect_rss
 
 SAMPLE_RSS = """<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0">
@@ -63,3 +63,28 @@ SAMPLE_RSS_IMG = """<?xml version="1.0" encoding="UTF-8"?>
 def test_collect_rss_extracts_image():
     arts = collect_rss([SAMPLE_RSS_IMG], text_fetcher=lambda url: "x")
     assert arts[0].image_url == "https://img.example.com/a.jpg"
+
+
+def test_og_image_extraction():
+    assert (
+        _og_image('<meta property="og:image" content="https://img/og.jpg">')
+        == "https://img/og.jpg"
+    )
+    assert (
+        _og_image('<meta content="https://img/o2.jpg" name="og:image">')
+        == "https://img/o2.jpg"
+    )
+    assert _og_image("<html></html>") is None
+
+
+def test_collect_rss_meta_path_gets_page_image(monkeypatch):
+    from src.collectors import rss
+
+    monkeypatch.setattr(
+        rss,
+        "fetch_article_meta",
+        lambda url: ("текст со страницы", "https://img/p.jpg"),
+    )
+    arts = rss.collect_rss([SAMPLE_RSS])  # без text_fetcher -> meta-путь
+    assert arts[0].text == "текст со страницы"
+    assert arts[0].image_url == "https://img/p.jpg"
