@@ -16,6 +16,7 @@ from src.db.models import ArticleRecord, ArticleStatus, Channel, RunLog
 from src.feeds import service as feeds_service
 from src.log import setup_logging
 from src.publisher.queue import parse_when, schedule_article, unschedule
+from src.search.service import semantic_search, web_search_collect
 from src.settings_store import EDITABLE, apply_overrides, current_values, set_override
 
 setup_logging()
@@ -520,6 +521,52 @@ def update_channel_api(channel_id: int, body: ChannelIn) -> ChannelOut:
 def delete_channel_api(channel_id: int) -> dict[str, bool]:
     with get_session() as session:
         return {"ok": channels_service.delete_channel(session, channel_id)}
+
+
+class SearchIn(BaseModel):
+    query: str
+    mode: str = "semantic"  # semantic | web
+    channel_id: int | None = None
+
+
+@app.post("/api/search")
+async def search_api(body: SearchIn) -> dict[str, object]:
+    if body.mode == "web":
+
+        def _web() -> dict[str, object]:
+            from src.llm.client import OllamaClient
+
+            with get_session() as session:
+                added, queries = web_search_collect(
+                    session, OllamaClient(), body.query, channel_id=body.channel_id
+                )
+                return {"mode": "web", "added": added, "queries": queries}
+
+        return await asyncio.to_thread(_web)
+
+    def _sem() -> dict[str, object]:
+        from src.llm.client import OllamaClient
+
+        with get_session() as session:
+            results = semantic_search(
+                session, OllamaClient(), body.query, channel_id=body.channel_id
+            )
+            return {
+                "mode": "semantic",
+                "results": [
+                    {
+                        "id": r.id,
+                        "title": r.title,
+                        "url": r.url,
+                        "status": r.status.value,
+                        "channel_id": r.channel_id,
+                        "similarity": round(sim, 3),
+                    }
+                    for r, sim in results
+                ],
+            }
+
+    return await asyncio.to_thread(_sem)
 
 
 @app.post("/api/collect")
