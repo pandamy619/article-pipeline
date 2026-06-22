@@ -35,9 +35,38 @@ class Settings(BaseSettings):
     # Источники
     rss_feeds: str = ""  # список URL через запятую
 
+    # Habr (русский, включён по умолчанию; пустые хабы = общая RU-лента)
+    habr_enabled: bool = True
+    habr_hubs: str = ""  # алиасы хабов через запятую, напр. programming,python
+
+    # arXiv (англоязычный; пустые категории = выключено)
+    arxiv_categories: str = ""  # коды через запятую, напр. cs.SE,cs.PL
+    arxiv_max_results: int = 10
+
+    # Reddit (англоязычный; пустые сабреддиты = выключено)
+    reddit_subreddits: str = ""  # имена без r/, напр. learnprogramming
+    reddit_period: str = "week"  # hour|day|week|month|year|all
+    reddit_limit: int = 10
+
+    @staticmethod
+    def _split(raw: str) -> list[str]:
+        return [x.strip() for x in raw.split(",") if x.strip()]
+
     @property
     def rss_feed_list(self) -> list[str]:
-        return [u.strip() for u in self.rss_feeds.split(",") if u.strip()]
+        return self._split(self.rss_feeds)
+
+    @property
+    def habr_hub_list(self) -> list[str]:
+        return self._split(self.habr_hubs)
+
+    @property
+    def arxiv_category_list(self) -> list[str]:
+        return self._split(self.arxiv_categories)
+
+    @property
+    def reddit_subreddit_list(self) -> list[str]:
+        return self._split(self.reddit_subreddits)
 
 
 settings = Settings()

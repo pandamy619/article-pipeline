@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from sqlalchemy.orm import Session
 
 from src.collectors.base import Article
-from src.collectors.rss import collect_rss
+from src.collectors.sources import collect_all
 from src.config import settings
 from src.db.repo import save_articles
 from src.filter.relevance import Scorer
@@ -27,8 +27,7 @@ class PipelineResult:
 
 
 def _default_collector(feeds: Iterable[str]) -> list[Article]:
-    limit = settings.max_articles_per_run or None
-    return collect_rss(feeds, limit_per_feed=limit)
+    return collect_all(feeds)
 
 
 def run_pipeline(

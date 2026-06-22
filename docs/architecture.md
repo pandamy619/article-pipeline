@@ -37,7 +37,7 @@
 | RSS избранных сайтов | `feedparser` (Python) по списку URL |
 | Habr | RSS-ленты хабов/потоков |
 | arXiv | официальный arXiv API (по категориям/запросам) |
-| Reddit | официальный API (PRAW) по сабреддитам |
+| Reddit | публичный JSON (.json у листингов) по сабреддитам — без OAuth |
 | Веб-поиск | self-hosted **SearXNG** (бесплатно, без ключей) или платный Search API (Tavily/Brave/Serper) |
 | Telegram-каналы | **Telethon** (user-сессия) для чтения чужих каналов |
 
@@ -83,7 +83,7 @@ Qwen3-14B делает из статьи готовый пост: краткое
 | Язык | Python 3.11+ |
 | Локальный LLM | Ollama + **Qwen3-14B (Q4_K_M)** |
 | Эмбеддинги | bge-m3 (через Ollama / sentence-transformers) |
-| Сбор | feedparser, PRAW, arXiv API, Telethon, SearXNG |
+| Сбор | feedparser (RSS/Habr/arXiv), httpx (Reddit JSON), Telethon, SearXNG |
 | Чистка текста | trafilatura / readability-lxml |
 | Telegram-бот | **aiogram 3** |
 | БД / кэш | PostgreSQL + Redis (или SQLite на старте) |
