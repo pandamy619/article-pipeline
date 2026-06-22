@@ -9,9 +9,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy import func, select
 
+from src.channels import service as channels_service
 from src.config import settings
 from src.db.base import get_session
-from src.db.models import ArticleRecord, ArticleStatus, RunLog
+from src.db.models import ArticleRecord, ArticleStatus, Channel, RunLog
 from src.feeds import service as feeds_service
 from src.log import setup_logging
 from src.publisher.queue import parse_when, schedule_article, unschedule
@@ -52,8 +53,17 @@ def auth_check() -> dict[str, bool]:
     return {"ok": True}
 
 
+def _publish_target(session, channel_id: int | None) -> tuple[str, str]:
+    """Бот-токен и chat_id для публикации статьи: канала или из .env (фолбэк)."""
+    ch = channels_service.get_channel(session, channel_id) if channel_id else None
+    token = ch.bot_token if ch and ch.bot_token else settings.telegram_bot_token
+    chat = ch.channel_id if ch and ch.channel_id else settings.telegram_channel_id
+    return token, chat
+
+
 class ArticleOut(BaseModel):
     id: int
+    channel_id: int | None
     status: str
     relevance_score: int | None
     relevance_reason: str | None
@@ -69,6 +79,7 @@ class ArticleOut(BaseModel):
 def _to_out(rec: ArticleRecord) -> ArticleOut:
     return ArticleOut(
         id=rec.id,
+        channel_id=rec.channel_id,
         status=rec.status.value,
         relevance_score=rec.relevance_score,
         relevance_reason=rec.relevance_reason,
@@ -83,11 +94,12 @@ def _to_out(rec: ArticleRecord) -> ArticleOut:
 
 
 @app.get("/api/stats")
-def stats() -> dict[str, int]:
+def stats(channel: int | None = None) -> dict[str, int]:
     with get_session() as session:
-        rows = session.execute(
-            select(ArticleRecord.status, func.count()).group_by(ArticleRecord.status)
-        ).all()
+        stmt = select(ArticleRecord.status, func.count())
+        if channel is not None:
+            stmt = stmt.where(ArticleRecord.channel_id == channel)
+        rows = session.execute(stmt.group_by(ArticleRecord.status)).all()
     counts = {s.value: 0 for s in ArticleStatus}
     for st, n in rows:
         counts[st.value] = n
@@ -96,12 +108,16 @@ def stats() -> dict[str, int]:
 
 
 @app.get("/api/articles")
-def list_articles(status: str | None = None, limit: int = 200) -> list[ArticleOut]:
+def list_articles(
+    status: str | None = None, channel: int | None = None, limit: int = 200
+) -> list[ArticleOut]:
     with get_session() as session:
-        stmt = select(ArticleRecord).order_by(ArticleRecord.id.desc()).limit(limit)
+        stmt = select(ArticleRecord).order_by(ArticleRecord.id.desc())
         if status:
             stmt = stmt.where(ArticleRecord.status == ArticleStatus(status))
-        return [_to_out(r) for r in session.scalars(stmt).all()]
+        if channel is not None:
+            stmt = stmt.where(ArticleRecord.channel_id == channel)
+        return [_to_out(r) for r in session.scalars(stmt.limit(limit)).all()]
 
 
 @app.post("/api/articles/{article_id}/reject")
@@ -182,14 +198,13 @@ async def publish_article(article_id: int) -> dict[str, bool]:
         rec = session.get(ArticleRecord, article_id)
         post = rec.post_text if rec else None
         image = rec.image_url if rec else None
+        token, chat = _publish_target(session, rec.channel_id if rec else None)
     if not post:
         return {"ok": False}
 
-    bot = Bot(settings.telegram_bot_token)
+    bot = Bot(token)
     try:
-        message_id = await publish(
-            bot, settings.telegram_channel_id, post, image_url=image
-        )
+        message_id = await publish(bot, chat, post, image_url=image)
     finally:
         await bot.session.close()
 
@@ -230,30 +245,28 @@ async def bulk_action(body: BulkIn) -> dict[str, object]:
         from src.publisher.telegram import publish
 
         done = 0
-        bot = Bot(settings.telegram_bot_token)
-        try:
-            for aid in body.ids:
-                with get_session() as session:
-                    rec = session.get(ArticleRecord, aid)
-                    post = rec.post_text if rec else None
-                    image = rec.image_url if rec else None
-                    published = rec and rec.status == ArticleStatus.published
-                if not post or published:
-                    continue
-                try:
-                    mid = await publish(
-                        bot, settings.telegram_channel_id, post, image_url=image
-                    )
-                except Exception:  # noqa: BLE001 — одна не должна ронять пачку
-                    continue
-                with get_session() as session:
-                    rec = session.get(ArticleRecord, aid)
-                    if rec:
-                        rec.tg_message_id = mid
-                        rec.status = ArticleStatus.published
-                done += 1
-        finally:
-            await bot.session.close()
+        for aid in body.ids:
+            with get_session() as session:
+                rec = session.get(ArticleRecord, aid)
+                post = rec.post_text if rec else None
+                image = rec.image_url if rec else None
+                published = rec and rec.status == ArticleStatus.published
+                token, chat = _publish_target(session, rec.channel_id if rec else None)
+            if not post or published:
+                continue
+            bot = Bot(token)
+            try:
+                mid = await publish(bot, chat, post, image_url=image)
+            except Exception:  # noqa: BLE001 — одна не должна ронять пачку
+                continue
+            finally:
+                await bot.session.close()
+            with get_session() as session:
+                rec = session.get(ArticleRecord, aid)
+                if rec:
+                    rec.tg_message_id = mid
+                    rec.status = ArticleStatus.published
+            done += 1
         return {"ok": True, "done": done}
 
     return {"ok": False, "done": 0}
@@ -419,6 +432,94 @@ def last_run() -> dict[str, object]:
             "rejected": rec.rejected,
             "drafted": rec.drafted,
         }
+
+
+class ChannelOut(BaseModel):
+    id: int
+    name: str
+    bot_token: str
+    channel_id: str
+    admin_user_id: str
+    topic: str
+    enabled: bool
+    relevance_threshold: int
+    publish_interval_minutes: int
+    rss_feeds: str
+    habr_enabled: bool
+    habr_hubs: str
+    arxiv_categories: str
+    reddit_subreddits: str
+    searxng_queries: str
+
+
+def _channel_out(ch: Channel) -> ChannelOut:
+    return ChannelOut(
+        id=ch.id,
+        name=ch.name,
+        bot_token=ch.bot_token,
+        channel_id=ch.channel_id,
+        admin_user_id=ch.admin_user_id,
+        topic=ch.topic,
+        enabled=ch.enabled,
+        relevance_threshold=ch.relevance_threshold,
+        publish_interval_minutes=ch.publish_interval_minutes,
+        rss_feeds=ch.rss_feeds,
+        habr_enabled=ch.habr_enabled,
+        habr_hubs=ch.habr_hubs,
+        arxiv_categories=ch.arxiv_categories,
+        reddit_subreddits=ch.reddit_subreddits,
+        searxng_queries=ch.searxng_queries,
+    )
+
+
+class ChannelIn(BaseModel):
+    name: str | None = None
+    bot_token: str | None = None
+    channel_id: str | None = None
+    admin_user_id: str | None = None
+    topic: str | None = None
+    enabled: bool | None = None
+    relevance_threshold: int | None = None
+    publish_interval_minutes: int | None = None
+    rss_feeds: str | None = None
+    habr_enabled: bool | None = None
+    habr_hubs: str | None = None
+    arxiv_categories: str | None = None
+    reddit_subreddits: str | None = None
+    searxng_queries: str | None = None
+
+
+@app.get("/api/channels")
+def list_channels_api() -> list[ChannelOut]:
+    with get_session() as session:
+        channels_service.ensure_default_channel(session)
+        return [_channel_out(c) for c in channels_service.list_channels(session)]
+
+
+@app.post("/api/channels")
+def create_channel_api(body: ChannelIn) -> ChannelOut:
+    with get_session() as session:
+        ch = channels_service.create_channel(
+            session, **body.model_dump(exclude_unset=True)
+        )
+        return _channel_out(ch)
+
+
+@app.put("/api/channels/{channel_id}")
+def update_channel_api(channel_id: int, body: ChannelIn) -> ChannelOut:
+    with get_session() as session:
+        ch = channels_service.update_channel(
+            session, channel_id, **body.model_dump(exclude_unset=True)
+        )
+        if not ch:
+            raise HTTPException(status_code=404, detail="not found")
+        return _channel_out(ch)
+
+
+@app.delete("/api/channels/{channel_id}")
+def delete_channel_api(channel_id: int) -> dict[str, bool]:
+    with get_session() as session:
+        return {"ok": channels_service.delete_channel(session, channel_id)}
 
 
 @app.post("/api/collect")

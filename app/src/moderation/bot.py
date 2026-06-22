@@ -14,7 +14,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from src.config import settings
 from src.db.base import get_session
-from src.db.models import RunLog
+from src.db.models import ArticleRecord, RunLog
 from src.feeds import service as feeds_service
 from src.llm.client import OllamaClient
 from src.moderation import service
@@ -189,7 +189,8 @@ async def _scheduled_run(bot: Bot) -> None:
 
 
 async def _publish_due(bot: Bot) -> None:
-    """Публикует статьи из очереди, у которых подошло время."""
+    """Публикует статьи из очереди, у которых подошло время (через бот канала)."""
+    from src.channels.service import get_channel
     from src.publisher.queue import due_article_ids
 
     with get_session() as session:
@@ -198,17 +199,26 @@ async def _publish_due(bot: Bot) -> None:
         log.info("publish-due: %d article(s) ready", len(ids))
     for aid in ids:
         with get_session() as session:
-            post = service.get_post_text(session, aid)
-            image = service.get_image(session, aid)
+            rec = session.get(ArticleRecord, aid)
+            post = rec.post_text if rec else None
+            image = rec.image_url if rec else None
+            ch = (
+                get_channel(session, rec.channel_id) if rec and rec.channel_id else None
+            )
+            token = ch.bot_token if ch and ch.bot_token else settings.telegram_bot_token
+            chat = (
+                ch.channel_id if ch and ch.channel_id else settings.telegram_channel_id
+            )
         if not post:
             continue
+        pub_bot = Bot(token)
         try:
-            mid = await publish(
-                bot, settings.telegram_channel_id, post, image_url=image
-            )
+            mid = await publish(pub_bot, chat, post, image_url=image)
         except Exception:  # noqa: BLE001 — одна статья не должна ронять остальные
             log.exception("scheduled publish failed for article %s", aid)
             continue
+        finally:
+            await pub_bot.session.close()
         with get_session() as session:
             service.mark_published(session, aid, mid)
         log.info("published scheduled article %s", aid)

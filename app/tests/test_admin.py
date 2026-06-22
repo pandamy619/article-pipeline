@@ -204,6 +204,28 @@ def test_auth_required_when_token_set(client, monkeypatch):
     )
 
 
+def test_channels_crud(client):
+    chs = client.get("/api/channels").json()
+    assert len(chs) == 1  # дефолтный канал засеян
+    c = client.post("/api/channels", json={"name": "Второй", "topic": "go"}).json()
+    cid = c["id"]
+    assert c["name"] == "Второй"
+    assert (
+        client.put(f"/api/channels/{cid}", json={"topic": "rust"}).json()["topic"]
+        == "rust"
+    )
+    assert client.delete(f"/api/channels/{cid}").json() == {"ok": True}
+    assert len(client.get("/api/channels").json()) == 1
+
+
+def test_articles_scoped_by_channel(client):
+    chs = client.get("/api/channels").json()  # ensure default + привяжет сироту
+    default_id = chs[0]["id"]
+    arts = client.get(f"/api/articles?channel={default_id}").json()
+    assert any(a["id"] == 1 for a in arts)
+    assert client.get("/api/articles?channel=999").json() == []
+
+
 def test_settings_api_get_and_set(client, monkeypatch):
     import src.config
 
