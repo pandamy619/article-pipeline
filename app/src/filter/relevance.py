@@ -10,20 +10,20 @@ from typing import Protocol
 from src.collectors.base import Article
 from src.config import settings
 
-CHANNEL_TOPIC = (
-    "статьи для начинающих программистов: основы, туториалы, вход в профессию, "
-    "первые языки и инструменты, разбор базовых концепций"
-)
 
-SYSTEM_PROMPT = (
-    "Ты — редактор Telegram-канала. Тематика канала: "
-    f"{CHANNEL_TOPIC}. "
-    "Оцени, насколько статья подходит каналу, по шкале от 0 до 10: "
-    "10 — отлично заходит новичку, 0 — не подходит (узкий хардкор для сеньоров, "
-    "не про программирование, реклама, вода). "
-    'Ответь СТРОГО в JSON: {"score": <целое 0-10>, '
-    '"reason": "<одно короткое предложение по-русски, не больше 15 слов>"}.'
-)
+def _system_prompt() -> str:
+    return (
+        "Ты — строгий редактор Telegram-канала. Тематика канала: "
+        f"{settings.channel_topic}. "
+        "Оцени, насколько статья подходит каналу, по шкале 0–10.\n"
+        "8–10 — обучающие материалы: туториалы, разбор основ, гайды, "
+        "пошаговые объяснения концепций для новичков.\n"
+        "0–4 — НЕ подходит, даже если упоминается программирование: новости "
+        "индустрии, релизы и анонсы, карьера/зарплаты/рынок труда, "
+        "подборки и «ТОП-N», реклама, мнения, вода, узкий хардкор для сеньоров.\n"
+        'Ответь СТРОГО в JSON: {"score": <целое 0-10>, '
+        '"reason": "<одно короткое предложение по-русски, не больше 15 слов>"}.'
+    )
 
 
 class Scorer(Protocol):
@@ -78,7 +78,7 @@ def _parse(raw: str) -> RelevanceResult:
 
 
 def score_relevance(article: Article, *, client: Scorer) -> RelevanceResult:
-    raw = client.generate(build_prompt(article), system=SYSTEM_PROMPT, format="json")
+    raw = client.generate(build_prompt(article), system=_system_prompt(), format="json")
     return _parse(raw)
 
 

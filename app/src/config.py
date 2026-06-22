@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     relevance_threshold: int = 7
     run_interval_minutes: int = 60
     max_articles_per_run: int = 0  # 0 = без лимита
+    channel_topic: str = (
+        "статьи для начинающих программистов: туториалы, основы, "
+        "разбор базовых концепций, первые языки и инструменты, вход в профессию"
+    )
 
     # Источники
     rss_feeds: str = ""  # список URL через запятую
