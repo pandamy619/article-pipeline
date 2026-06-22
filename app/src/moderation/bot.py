@@ -171,7 +171,9 @@ async def on_action(query: CallbackQuery, bot: Bot, state: FSMContext) -> None:
             post = service.get_post_text(session, article_id)
             image = service.get_image(session, article_id)
             rec = session.get(ArticleRecord, article_id)
-            ch = get_channel(session, rec.channel_id) if rec and rec.channel_id else None
+            ch = (
+                get_channel(session, rec.channel_id) if rec and rec.channel_id else None
+            )
             chat = (
                 ch.channel_id if ch and ch.channel_id else settings.telegram_channel_id
             )

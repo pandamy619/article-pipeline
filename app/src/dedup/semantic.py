@@ -53,9 +53,7 @@ def _load_refs(
     )
     if channel_id is not None:
         stmt = stmt.where(ArticleRecord.channel_id == channel_id)
-    rows = session.scalars(
-        stmt.order_by(ArticleRecord.id.desc()).limit(window)
-    ).all()
+    rows = session.scalars(stmt.order_by(ArticleRecord.id.desc()).limit(window)).all()
     refs: list[tuple[str, list[float]]] = []
     for r in rows:
         try:
