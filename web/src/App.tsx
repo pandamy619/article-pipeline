@@ -1,4 +1,4 @@
-import { type CSSProperties, Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import {
   type ChatMsg,
   chatArticle,
@@ -7,16 +7,25 @@ import {
   fetchStats,
   runAction,
   savePost,
+  setArticleStatus,
 } from "./api";
 import type { Article, Stats } from "./types";
 
 const STATUSES = ["new", "filtered", "drafted", "pending", "published", "rejected"];
+const STATUS_RU: Record<string, string> = {
+  new: "новая",
+  filtered: "прошла фильтр",
+  drafted: "черновик",
+  pending: "на модерации",
+  published: "опубликована",
+  rejected: "отклонена",
+};
 type Mode = "preview" | "edit";
 
 export default function App() {
   const [articles, setArticles] = useState<Article[]>([]);
   const [stats, setStats] = useState<Stats>({});
-  const [status, setStatus] = useState<string>("");
+  const [filter, setFilter] = useState("");
   const [busy, setBusy] = useState(false);
   const [openId, setOpenId] = useState<number | null>(null);
   const [mode, setMode] = useState<Mode>("preview");
@@ -31,153 +40,201 @@ export default function App() {
   }
 
   useEffect(() => {
-    refresh(status);
-  }, [status]);
+    refresh(filter);
+  }, [filter]);
 
   async function run(fn: () => Promise<void>) {
     setBusy(true);
     try {
       await fn();
-      await refresh(status);
+      await refresh(filter);
+    } catch (e) {
+      alert(`Ошибка: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setBusy(false);
     }
   }
 
-  function openPanel(id: number, m: Mode) {
-    if (openId === id && mode === m) {
-      setOpenId(null);
-    } else {
+  function toggle(id: number, m: Mode) {
+    if (openId === id && mode === m) setOpenId(null);
+    else {
       setOpenId(id);
       setMode(m);
     }
   }
 
   return (
-    <div style={{ fontFamily: "system-ui, sans-serif", margin: 24 }}>
-      <h1 style={{ fontSize: 20 }}>article-pipeline — статьи</h1>
+    <div className="app">
+      {busy && <div className="working-badge">работаю…</div>}
 
-      <button disabled={busy} onClick={() => run(() => collect())}>
-        🔄 Собрать сейчас
-      </button>
+      <header className="topbar">
+        <div>
+          <h1>article-pipeline</h1>
+          <p className="sub">панель модерации статей</p>
+        </div>
+        <button
+          className="btn btn-primary"
+          disabled={busy}
+          onClick={() => run(() => collect())}
+        >
+          {busy ? "…" : "Собрать сейчас"}
+        </button>
+      </header>
 
-      <div style={{ margin: "12px 0" }}>
-        <FilterTab
-          label={`все (${stats.total ?? 0})`}
-          active={status === ""}
-          onClick={() => setStatus("")}
-        />
-        {STATUSES.map((st) => (
-          <FilterTab
-            key={st}
-            label={`${st} (${stats[st] ?? 0})`}
-            active={status === st}
-            onClick={() => setStatus(st)}
-          />
+      <nav className="chips">
+        <button
+          className={`chip${filter === "" ? " active" : ""}`}
+          onClick={() => setFilter("")}
+        >
+          все <b>{stats.total ?? 0}</b>
+        </button>
+        {STATUSES.map((s) => (
+          <button
+            key={s}
+            className={`chip${filter === s ? " active" : ""}`}
+            onClick={() => setFilter(s)}
+          >
+            {STATUS_RU[s]} <b>{stats[s] ?? 0}</b>
+          </button>
         ))}
-      </div>
+      </nav>
 
-      <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 14 }}>
-        <thead>
-          <tr>
-            {["id", "статус", "оценка", "заголовок / причина", "источник", "действия"].map(
-              (h) => (
-                <th key={h} style={th}>
-                  {h}
-                </th>
-              ),
-            )}
-          </tr>
-        </thead>
-        <tbody>
-          {articles.map((a) => (
-            <Fragment key={a.id}>
-              <tr>
-                <td style={td}>{a.id}</td>
-                <td style={td}>
-                  <span style={badge(a.status)}>{a.status}</span>
-                </td>
-                <td style={td}>{a.relevance_score ?? ""}</td>
-                <td style={td}>
-                  <a href={a.url} target="_blank" rel="noreferrer">
-                    {a.title}
-                  </a>
-                  <br />
-                  <small style={{ color: "#666" }}>{a.relevance_reason}</small>
-                </td>
-                <td style={td}>{a.source}</td>
-                <td style={{ ...td, whiteSpace: "nowrap" }}>
-                  {a.post_text ? (
-                    <>
-                      <button onClick={() => openPanel(a.id, "preview")} title="превью">
-                        📄
-                      </button>
-                      <button onClick={() => openPanel(a.id, "edit")} title="редактировать">
-                        ✏️
-                      </button>
-                      <button
-                        disabled={busy}
-                        title="опубликовать"
-                        onClick={() => run(() => runAction(a.id, "publish"))}
-                      >
-                        ✅
-                      </button>
-                    </>
-                  ) : (
-                    <button
+      <div className="card">
+        <table className="tbl">
+          <thead>
+            <tr>
+              <th style={{ width: 36 }}>#</th>
+              <th style={{ width: 158 }}>статус</th>
+              <th style={{ width: 56 }}>оценка</th>
+              <th>заголовок и причина</th>
+              <th style={{ width: 100 }}>источник</th>
+              <th style={{ width: 132 }}>действия</th>
+            </tr>
+          </thead>
+          <tbody>
+            {articles.map((a) => (
+              <Fragment key={a.id}>
+                <tr className="row">
+                  <td className="muted">{a.id}</td>
+                  <td>
+                    <select
+                      className={`select st-${a.status}`}
+                      value={a.status}
                       disabled={busy}
-                      title="сделать пост"
-                      onClick={() => run(() => runAction(a.id, "draft"))}
+                      title="сменить статус вручную"
+                      onChange={(e) => run(() => setArticleStatus(a.id, e.target.value))}
                     >
-                      ✍
-                    </button>
-                  )}
-                  <button
-                    disabled={busy}
-                    title="отклонить"
-                    onClick={() => run(() => runAction(a.id, "reject"))}
-                  >
-                    ❌
-                  </button>
-                </td>
-              </tr>
-              {openId === a.id && a.post_text && (
-                <tr>
-                  <td style={td} colSpan={6}>
-                    {mode === "preview" ? (
-                      <PreviewPanel text={a.post_text} onEdit={() => setMode("edit")} />
+                      {STATUSES.map((s) => (
+                        <option key={s} value={s}>
+                          {STATUS_RU[s]}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>
+                    {a.relevance_score != null ? (
+                      <span className="score">{a.relevance_score}</span>
                     ) : (
-                      <EditPanel
-                        article={a}
-                        onChanged={() => refresh(status)}
-                        onPreview={() => setMode("preview")}
-                      />
+                      <span className="muted">—</span>
                     )}
                   </td>
+                  <td>
+                    <a className="title" href={a.url} target="_blank" rel="noreferrer">
+                      {a.title}
+                    </a>
+                    {a.relevance_reason && <div className="reason">{a.relevance_reason}</div>}
+                  </td>
+                  <td className="muted">{a.source}</td>
+                  <td>
+                    <div className="actions">
+                      {a.post_text ? (
+                        <>
+                          <button
+                            className={`icon${
+                              openId === a.id && mode === "preview" ? " on" : ""
+                            }`}
+                            title="превью"
+                            onClick={() => toggle(a.id, "preview")}
+                          >
+                            👁
+                          </button>
+                          <button
+                            className={`icon${
+                              openId === a.id && mode === "edit" ? " on" : ""
+                            }`}
+                            title="редактировать"
+                            onClick={() => toggle(a.id, "edit")}
+                          >
+                            ✏️
+                          </button>
+                          <button
+                            className="icon"
+                            title="опубликовать в канал"
+                            disabled={busy}
+                            onClick={() => {
+                              if (confirm("Опубликовать пост в Telegram-канал?")) {
+                                run(() => runAction(a.id, "publish"));
+                              }
+                            }}
+                          >
+                            🚀
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          className="icon"
+                          title="сгенерировать пост"
+                          disabled={busy}
+                          onClick={() => run(() => runAction(a.id, "draft"))}
+                        >
+                          ✍️
+                        </button>
+                      )}
+                    </div>
+                  </td>
                 </tr>
-              )}
-            </Fragment>
-          ))}
-          {articles.length === 0 && (
-            <tr>
-              <td style={td} colSpan={6}>
-                пусто
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+                {openId === a.id && a.post_text && (
+                  <tr>
+                    <td colSpan={6} className="panel-cell">
+                      {mode === "preview" ? (
+                        <PreviewPanel text={a.post_text} onEdit={() => setMode("edit")} />
+                      ) : (
+                        <EditPanel
+                          article={a}
+                          onChanged={() => refresh(filter)}
+                          onPreview={() => setMode("preview")}
+                        />
+                      )}
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            ))}
+            {articles.length === 0 && (
+              <tr>
+                <td colSpan={6}>
+                  <div className="empty">Здесь пока пусто</div>
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
 
 function PreviewPanel({ text, onEdit }: { text: string; onEdit: () => void }) {
   return (
-    <div>
-      <button onClick={onEdit} style={{ marginBottom: 8 }}>
-        ✏️ Редактировать
-      </button>
-      <TelegramPreview text={text} />
+    <div className="panel">
+      <div className="col">
+        <div className="toolbar">
+          <button className="btn" onClick={onEdit}>
+            ✏️ Редактировать
+          </button>
+        </div>
+        <TelegramView text={text} />
+      </div>
     </div>
   );
 }
@@ -201,6 +258,8 @@ function EditPanel({
     try {
       await savePost(article.id, text);
       await onChanged();
+    } catch (e) {
+      alert(`Ошибка: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setWorking(false);
     }
@@ -216,105 +275,58 @@ function EditPanel({
     try {
       const reply = await chatArticle(article.id, next);
       setMessages([...next, { role: "assistant", content: reply }]);
+    } catch (e) {
+      setMessages([
+        ...next,
+        {
+          role: "assistant",
+          content: `⚠️ ошибка: ${e instanceof Error ? e.message : String(e)}`,
+        },
+      ]);
     } finally {
       setWorking(false);
     }
   }
 
   return (
-    <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-      {/* слева: правка поста в том же стиле, что превью */}
-      <div style={{ flex: "1 1 380px" }}>
-        <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
-          <button onClick={onPreview}>👁 Превью</button>
-          <button disabled={working} onClick={save}>
-            💾 Сохранить
+    <div className="panel">
+      <div className="col">
+        <div className="toolbar">
+          <button className="btn" onClick={onPreview}>
+            👁 Превью
+          </button>
+          <button className="btn btn-primary" disabled={working} onClick={save}>
+            Сохранить
           </button>
         </div>
-        <div style={{ background: "#cfe0ee", padding: 16, borderRadius: 8 }}>
+        <div className="tg-wrap">
           <textarea
+            className="tg-edit"
             value={text}
             onChange={(e) => setText(e.target.value)}
-            style={{
-              width: "100%",
-              maxWidth: 480,
-              minHeight: 220,
-              boxSizing: "border-box",
-              background: "#fff",
-              border: "none",
-              borderRadius: 12,
-              padding: "8px 12px",
-              fontFamily: "inherit",
-              fontSize: 15,
-              lineHeight: 1.45,
-              resize: "vertical",
-              boxShadow: "0 1px 1px rgba(0,0,0,0.15)",
-            }}
           />
         </div>
       </div>
 
-      {/* справа: диалог с моделью по статье */}
-      <div
-        style={{
-          flex: "1 1 320px",
-          display: "flex",
-          flexDirection: "column",
-          border: "1px solid #ddd",
-          borderRadius: 8,
-          padding: 10,
-        }}
-      >
-        <strong style={{ fontSize: 13 }}>Чат с ИИ по статье</strong>
-        <div
-          style={{
-            flex: 1,
-            minHeight: 180,
-            maxHeight: 300,
-            overflowY: "auto",
-            margin: "8px 0",
-            fontSize: 13,
-          }}
-        >
+      <div className="chat">
+        <div className="chat-title">Чат с ИИ по статье</div>
+        <div className="chat-log">
           {messages.length === 0 && (
-            <span style={{ color: "#999" }}>
-              Спроси что угодно по статье или попроси переписать пост.
-            </span>
+            <span className="hint">Спроси по статье или попроси переписать пост.</span>
           )}
           {messages.map((m, i) => (
-            <div
-              key={i}
-              style={{ textAlign: m.role === "user" ? "right" : "left", margin: "6px 0" }}
-            >
-              <div
-                style={{
-                  display: "inline-block",
-                  textAlign: "left",
-                  background: m.role === "user" ? "#dcf8c6" : "#f1f0f0",
-                  padding: "6px 10px",
-                  borderRadius: 10,
-                  maxWidth: "90%",
-                  whiteSpace: "pre-wrap",
-                  wordBreak: "break-word",
-                }}
-              >
-                {m.content}
-              </div>
+            <Fragment key={i}>
+              <div className={`msg ${m.role}`}>{m.content}</div>
               {m.role === "assistant" && (
-                <div>
-                  <button
-                    style={{ fontSize: 11, marginTop: 2 }}
-                    onClick={() => setText(m.content)}
-                  >
-                    ↧ вставить в пост
-                  </button>
-                </div>
+                <button className="msg-apply" onClick={() => setText(m.content)}>
+                  ↧ вставить в пост
+                </button>
               )}
-            </div>
+            </Fragment>
           ))}
-          {working && <small style={{ color: "#666" }}>модель печатает…</small>}
+          {working && <span className="hint">модель печатает…</span>}
         </div>
-        <div style={{ display: "flex", gap: 6 }}>
+        <div className="chat-input">
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -322,9 +334,8 @@ function EditPanel({
               if (e.key === "Enter") send();
             }}
             placeholder="напиши сообщение…"
-            style={{ flex: 1, padding: 6 }}
           />
-          <button disabled={working} onClick={send}>
+          <button className="btn btn-primary" disabled={working} onClick={send}>
             ➤
           </button>
         </div>
@@ -337,14 +348,14 @@ function linkify(text: string) {
   return text.split(/(https?:\/\/\S+|#[\wа-яёА-ЯЁ]+)/g).map((part, i) => {
     if (/^https?:\/\//.test(part)) {
       return (
-        <a key={i} href={part} target="_blank" rel="noreferrer" style={{ color: "#2481cc" }}>
+        <a key={i} className="tg-link" href={part} target="_blank" rel="noreferrer">
           {part}
         </a>
       );
     }
     if (/^#/.test(part)) {
       return (
-        <span key={i} style={{ color: "#2481cc" }}>
+        <span key={i} className="tg-link">
           {part}
         </span>
       );
@@ -353,74 +364,10 @@ function linkify(text: string) {
   });
 }
 
-function TelegramPreview({ text }: { text: string }) {
+function TelegramView({ text }: { text: string }) {
   return (
-    <div style={{ background: "#cfe0ee", padding: 16, borderRadius: 8 }}>
-      <div
-        style={{
-          background: "#fff",
-          maxWidth: 480,
-          padding: "8px 12px",
-          borderRadius: 12,
-          fontSize: 15,
-          lineHeight: 1.45,
-          whiteSpace: "pre-wrap",
-          wordBreak: "break-word",
-          boxShadow: "0 1px 1px rgba(0,0,0,0.15)",
-        }}
-      >
-        {linkify(text)}
-      </div>
+    <div className="tg-wrap">
+      <div className="tg-bubble">{linkify(text)}</div>
     </div>
   );
-}
-
-function FilterTab(props: { label: string; active: boolean; onClick: () => void }) {
-  return (
-    <button
-      onClick={props.onClick}
-      style={{
-        marginRight: 8,
-        background: props.active ? "#2563eb" : "#eee",
-        color: props.active ? "#fff" : "#111",
-        border: "none",
-        borderRadius: 4,
-        padding: "4px 8px",
-        cursor: "pointer",
-      }}
-    >
-      {props.label}
-    </button>
-  );
-}
-
-const th: CSSProperties = {
-  border: "1px solid #ddd",
-  padding: "6px 8px",
-  textAlign: "left",
-  background: "#f5f5f5",
-};
-const td: CSSProperties = {
-  border: "1px solid #ddd",
-  padding: "6px 8px",
-  textAlign: "left",
-  verticalAlign: "top",
-};
-
-const COLORS: Record<string, string> = {
-  new: "#eee",
-  filtered: "#dbeafe",
-  drafted: "#fde68a",
-  pending: "#fed7aa",
-  published: "#bbf7d0",
-  rejected: "#fecaca",
-};
-
-function badge(status: string): CSSProperties {
-  return {
-    background: COLORS[status] ?? "#eee",
-    padding: "2px 6px",
-    borderRadius: 4,
-    fontSize: 12,
-  };
 }

@@ -12,19 +12,35 @@ export async function fetchArticles(status?: string): Promise<Article[]> {
 }
 
 export async function runAction(id: number, what: ArticleAction): Promise<void> {
-  await fetch(`/api/articles/${id}/${what}`, { method: "POST" });
+  const r = await fetch(`/api/articles/${id}/${what}`, { method: "POST" });
+  if (!r.ok) throw new Error(`${what}: HTTP ${r.status}`);
+  const data = await r.json().catch(() => ({}));
+  if (data && data.ok === false) {
+    throw new Error(`${what}: сервер отклонил запрос (нет поста или ошибка модели)`);
+  }
+}
+
+export async function setArticleStatus(id: number, status: string): Promise<void> {
+  const r = await fetch(`/api/articles/${id}/status`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status }),
+  });
+  if (!r.ok) throw new Error(`status: HTTP ${r.status}`);
 }
 
 export async function collect(): Promise<void> {
-  await fetch("/api/collect", { method: "POST" });
+  const r = await fetch("/api/collect", { method: "POST" });
+  if (!r.ok) throw new Error(`collect: HTTP ${r.status}`);
 }
 
 export async function savePost(id: number, text: string): Promise<void> {
-  await fetch(`/api/articles/${id}/post`, {
+  const r = await fetch(`/api/articles/${id}/post`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text }),
   });
+  if (!r.ok) throw new Error(`save: HTTP ${r.status}`);
 }
 
 export async function revisePost(id: number, instruction: string): Promise<string> {
