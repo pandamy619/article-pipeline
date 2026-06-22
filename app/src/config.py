@@ -1,5 +1,7 @@
 """Конфигурация приложения из переменных окружения (.env)."""
 
+import re
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -50,7 +52,19 @@ class Settings(BaseSettings):
 
     @staticmethod
     def _split(raw: str) -> list[str]:
-        return [x.strip() for x in raw.split(",") if x.strip()]
+        """Список из значения env: терпит инлайн-комментарии и мусор.
+
+        URL/алиасы/коды/имена сабреддитов не содержат пробелов, поэтому
+        токены с пробелами и начинающиеся с '#' отбрасываем — это защита
+        от случайно попавшего в значение комментария из .env.
+        """
+        raw = re.split(r"\s#", raw, maxsplit=1)[0]  # срезаем инлайн-комментарий " #..."
+        out: list[str] = []
+        for token in raw.split(","):
+            token = token.strip()
+            if token and not token.startswith("#") and " " not in token:
+                out.append(token)
+        return out
 
     @property
     def rss_feed_list(self) -> list[str]:
