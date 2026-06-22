@@ -67,3 +67,11 @@ class OllamaClient:
         resp.raise_for_status()
         content = resp.json().get("message", {}).get("content", "")
         return re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
+
+    def embed(self, text: str, *, model: str | None = None) -> list[float]:
+        resp = self._client.post(
+            "/api/embeddings",
+            json={"model": model or settings.embed_model, "prompt": text},
+        )
+        resp.raise_for_status()
+        return resp.json().get("embedding", [])

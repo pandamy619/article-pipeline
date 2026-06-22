@@ -34,6 +34,11 @@ class Settings(BaseSettings):
         "разбор базовых концепций, первые языки и инструменты, вход в профессию"
     )
 
+    # Семантический дедуп (эмбеддинги bge-m3)
+    semantic_dedup_enabled: bool = True
+    semantic_dedup_threshold: float = 0.88  # косинус 0..1; выше = строже к дублям
+    semantic_dedup_window: int = 300  # с каким числом последних статей сравнивать
+
     # Источники
     rss_feeds: str = ""  # список URL через запятую
 

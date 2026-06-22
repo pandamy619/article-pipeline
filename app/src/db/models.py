@@ -46,6 +46,7 @@ class ArticleRecord(Base):
     relevance_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
     relevance_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     post_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    embedding: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON-вектор
     tg_message_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow
