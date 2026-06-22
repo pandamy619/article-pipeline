@@ -361,7 +361,7 @@ export default function App() {
               <th style={{ width: 56 }}>оценка</th>
               <th>заголовок и причина</th>
               <th style={{ width: 100 }}>источник</th>
-              <th style={{ width: 230 }}>действия</th>
+              <th style={{ width: 270 }}>действия</th>
             </tr>
           </thead>
           <tbody>
@@ -419,7 +419,7 @@ export default function App() {
                       {a.post_text ? (
                         <>
                           <button
-                            className={`act${
+                            className={`alink${
                               openId === a.id && mode === "preview" ? " on" : ""
                             }`}
                             onClick={() => toggle(a.id, "preview")}
@@ -427,7 +427,7 @@ export default function App() {
                             превью
                           </button>
                           <button
-                            className={`act${
+                            className={`alink${
                               openId === a.id && mode === "edit" ? " on" : ""
                             }`}
                             onClick={() => toggle(a.id, "edit")}
@@ -436,7 +436,7 @@ export default function App() {
                           </button>
                           {a.status !== "published" && (
                             <button
-                              className="act"
+                              className="alink"
                               disabled={busy}
                               onClick={() => {
                                 if (confirm("Опубликовать пост в Telegram-канал?")) {
@@ -449,7 +449,7 @@ export default function App() {
                           )}
                           {a.status !== "published" && (
                             <button
-                              className={`act${
+                              className={`alink${
                                 openId === a.id && mode === "schedule" ? " on" : ""
                               }`}
                               onClick={() => toggle(a.id, "schedule")}
@@ -460,7 +460,7 @@ export default function App() {
                         </>
                       ) : (
                         <button
-                          className="act"
+                          className="alink"
                           disabled={busy}
                           onClick={() => run(() => runAction(a.id, "draft"))}
                         >

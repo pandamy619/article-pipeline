@@ -343,8 +343,36 @@ table.tbl {
 /* ── action icons ──────────────────────── */
 .actions {
   display: flex;
-  gap: 4px;
+  align-items: center;
   flex-wrap: wrap;
+  gap: 2px 0;
+}
+.alink {
+  appearance: none;
+  border: none;
+  background: none;
+  padding: 2px 0;
+  font-size: 13px;
+  color: var(--accent);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.alink:hover {
+  text-decoration: underline;
+}
+.alink.on {
+  font-weight: 550;
+}
+.alink:disabled {
+  opacity: 0.5;
+  cursor: default;
+  text-decoration: none;
+}
+.alink:not(:last-child)::after {
+  content: "·";
+  color: var(--muted);
+  margin: 0 7px;
+  text-decoration: none;
 }
 .act {
   appearance: none;
