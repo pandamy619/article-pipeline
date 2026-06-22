@@ -8,22 +8,26 @@ import {
   checkAuth,
   clearToken,
   collect,
+  createChannel,
+  deleteChannel,
   deleteFeed,
   fetchArticles,
+  fetchChannels,
   fetchFeeds,
   fetchLastRun,
   fetchSettings,
   fetchStats,
   getToken,
-  saveSetting,
   runAction,
   savePost,
+  saveSetting,
   scheduleArticle,
   setArticleStatus,
   setToken,
   unscheduleArticle,
+  updateChannel,
 } from "./api";
-import type { Article, Feed, LastRun, Stats } from "./types";
+import type { Article, Channel, Feed, LastRun, Stats } from "./types";
 
 const STATUSES = [
   "new",
@@ -55,14 +59,25 @@ export default function App() {
   const [mode, setMode] = useState<Mode>("preview");
   const [showFeeds, setShowFeeds] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showChannels, setShowChannels] = useState(false);
   const [needLogin, setNeedLogin] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [channels, setChannels] = useState<Channel[]>([]);
+  const [currentChannel, setCurrentChannel] = useState<number | null>(null);
 
-  async function refresh(current: string) {
+  async function loadChannels() {
+    try {
+      setChannels(await fetchChannels());
+    } catch (e) {
+      if (e instanceof AuthError) setNeedLogin(true);
+    }
+  }
+
+  async function refresh(current: string, channel: number | null) {
     try {
       const [a, s, lr] = await Promise.all([
-        fetchArticles(current || undefined),
-        fetchStats(),
+        fetchArticles(current || undefined, channel),
+        fetchStats(channel),
         fetchLastRun(),
       ]);
       setArticles(a);
@@ -75,9 +90,13 @@ export default function App() {
   }
 
   useEffect(() => {
+    loadChannels();
+  }, []);
+
+  useEffect(() => {
     setSelected(new Set());
-    refresh(filter);
-  }, [filter]);
+    refresh(filter, currentChannel);
+  }, [filter, currentChannel]);
 
   function toggleSel(id: number) {
     setSelected((prev) => {
@@ -101,7 +120,7 @@ export default function App() {
     setBusy(true);
     try {
       await fn();
-      await refresh(filter);
+      await refresh(filter, currentChannel);
     } catch (e) {
       if (e instanceof AuthError) setNeedLogin(true);
       else alert(`Ошибка: ${e instanceof Error ? e.message : String(e)}`);
@@ -123,7 +142,7 @@ export default function App() {
       <Login
         onSuccess={() => {
           setNeedLogin(false);
-          refresh(filter);
+          refresh(filter, currentChannel);
         }}
       />
     );
@@ -146,7 +165,35 @@ export default function App() {
           <h1>article-pipeline</h1>
           <p className="sub">панель модерации статей</p>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div
+          style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}
+        >
+          <select
+            value={currentChannel ?? ""}
+            onChange={(e) =>
+              setCurrentChannel(e.target.value ? Number(e.target.value) : null)
+            }
+            title="канал"
+            style={{
+              border: "1px solid var(--line-strong)",
+              borderRadius: 8,
+              padding: "7px 10px",
+              fontSize: 13,
+              background: "var(--card)",
+              color: "var(--text)",
+              fontFamily: "inherit",
+            }}
+          >
+            <option value="">Все каналы</option>
+            {channels.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name || `#${c.id}`}
+              </option>
+            ))}
+          </select>
+          <button className="btn" onClick={() => setShowChannels((v) => !v)}>
+            Каналы
+          </button>
           <button className="btn" onClick={() => setShowFeeds((v) => !v)}>
             Ленты
           </button>
@@ -178,6 +225,16 @@ export default function App() {
       {showFeeds && <FeedsPanel />}
 
       {showSettings && <SettingsPanel />}
+
+      {showChannels && (
+        <ChannelsPanel
+          channels={channels}
+          onChanged={async () => {
+            await loadChannels();
+            await refresh(filter, currentChannel);
+          }}
+        />
+      )}
 
       {lastRun?.exists && <LastRunLine run={lastRun} />}
 
@@ -390,13 +447,13 @@ export default function App() {
                       ) : mode === "edit" ? (
                         <EditPanel
                           article={a}
-                          onChanged={() => refresh(filter)}
+                          onChanged={() => refresh(filter, currentChannel)}
                           onPreview={() => setMode("preview")}
                         />
                       ) : (
                         <SchedulePanel
                           article={a}
-                          onChanged={() => refresh(filter)}
+                          onChanged={() => refresh(filter, currentChannel)}
                         />
                       )}
                     </td>
@@ -742,6 +799,189 @@ function LastRunLine({ run }: { run: LastRun }) {
     <div className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
       последний прогон: собрано {run.collected}, добавлено {run.added}, дублей {dups},
       в фильтр {run.filtered}, черновиков {run.drafted} · {when}
+    </div>
+  );
+}
+
+const CHANNEL_FIELDS: {
+  key: keyof Channel;
+  label: string;
+  type: "text" | "int" | "bool" | "area";
+}[] = [
+  { key: "name", label: "Название", type: "text" },
+  { key: "bot_token", label: "Бот-токен", type: "text" },
+  { key: "channel_id", label: "Channel ID (@name или -100…)", type: "text" },
+  { key: "admin_user_id", label: "Admin user id", type: "text" },
+  { key: "topic", label: "Тематика (для фильтра)", type: "area" },
+  { key: "enabled", label: "Включён", type: "bool" },
+  { key: "relevance_threshold", label: "Порог релевантности (0–10)", type: "int" },
+  { key: "publish_interval_minutes", label: "Интервал публикации (мин)", type: "int" },
+  { key: "rss_feeds", label: "RSS-ленты (через запятую)", type: "area" },
+  { key: "habr_enabled", label: "Habr включён", type: "bool" },
+  { key: "habr_hubs", label: "Habr: хабы", type: "text" },
+  { key: "arxiv_categories", label: "arXiv: категории", type: "text" },
+  { key: "reddit_subreddits", label: "Reddit: сабреддиты", type: "text" },
+  { key: "searxng_queries", label: "Веб-поиск: запросы", type: "area" },
+];
+
+const EMPTY_CHANNEL: Partial<Channel> = {
+  name: "",
+  bot_token: "",
+  channel_id: "",
+  admin_user_id: "",
+  topic: "",
+  enabled: true,
+  relevance_threshold: 7,
+  publish_interval_minutes: 120,
+  rss_feeds: "",
+  habr_enabled: false,
+  habr_hubs: "",
+  arxiv_categories: "",
+  reddit_subreddits: "",
+  searxng_queries: "",
+};
+
+function ChannelsPanel({
+  channels,
+  onChanged,
+}: {
+  channels: Channel[];
+  onChanged: () => Promise<void>;
+}) {
+  const [editId, setEditId] = useState<number | "new">(channels[0]?.id ?? "new");
+  const [form, setForm] = useState<Partial<Channel>>(
+    channels[0] ? { ...channels[0] } : { ...EMPTY_CHANNEL },
+  );
+  const [busy, setBusy] = useState(false);
+
+  function pick(id: number | "new") {
+    setEditId(id);
+    const c = id === "new" ? null : channels.find((x) => x.id === id);
+    setForm(c ? { ...c } : { ...EMPTY_CHANNEL });
+  }
+
+  async function save() {
+    setBusy(true);
+    try {
+      if (editId === "new") {
+        const created = await createChannel(form);
+        await onChanged();
+        setEditId(created.id);
+      } else {
+        await updateChannel(editId, form);
+        await onChanged();
+      }
+    } catch (e) {
+      alert(`Ошибка: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove() {
+    if (editId === "new") return;
+    if (!confirm("Удалить канал? Его статьи отвяжутся.")) return;
+    setBusy(true);
+    try {
+      await deleteChannel(editId);
+      setEditId("new");
+      setForm({ ...EMPTY_CHANNEL });
+      await onChanged();
+    } catch (e) {
+      alert(`Ошибка: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const inp: CSSProperties = {
+    border: "1px solid var(--line-strong)",
+    borderRadius: 8,
+    padding: "7px 9px",
+    fontSize: 13,
+    fontFamily: "inherit",
+  };
+
+  return (
+    <div className="card" style={{ padding: "14px 16px", marginBottom: 16 }}>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+        {channels.map((c) => (
+          <button
+            key={c.id}
+            className={`chip${editId === c.id ? " active" : ""}`}
+            onClick={() => pick(c.id)}
+          >
+            {c.name || `#${c.id}`}
+          </button>
+        ))}
+        <button
+          className={`chip${editId === "new" ? " active" : ""}`}
+          onClick={() => pick("new")}
+        >
+          + новый
+        </button>
+      </div>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+          gap: "10px 16px",
+        }}
+      >
+        {CHANNEL_FIELDS.map((f) => (
+          <label
+            key={f.key}
+            style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}
+          >
+            <span className="muted">{f.label}</span>
+            {f.type === "bool" ? (
+              <select
+                value={form[f.key] ? "true" : "false"}
+                onChange={(e) =>
+                  setForm({ ...form, [f.key]: e.target.value === "true" })
+                }
+                style={inp}
+              >
+                <option value="true">вкл</option>
+                <option value="false">выкл</option>
+              </select>
+            ) : f.type === "area" ? (
+              <textarea
+                value={String(form[f.key] ?? "")}
+                onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
+                style={{ ...inp, minHeight: 52, resize: "vertical" }}
+              />
+            ) : (
+              <input
+                type={f.type === "int" ? "number" : "text"}
+                value={String(form[f.key] ?? "")}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    [f.key]:
+                      f.type === "int" ? Number(e.target.value) : e.target.value,
+                  })
+                }
+                style={inp}
+              />
+            )}
+          </label>
+        ))}
+      </div>
+      <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+        <button className="btn btn-primary" disabled={busy} onClick={save}>
+          {editId === "new" ? "Создать" : "Сохранить"}
+        </button>
+        {editId !== "new" && (
+          <button className="btn" disabled={busy} onClick={remove}>
+            Удалить канал
+          </button>
+        )}
+      </div>
+      <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+        У каждого канала свой бот-токен, тематика и источники. Изменения
+        применяются со следующего прогона.
+      </div>
     </div>
   );
 }

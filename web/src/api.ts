@@ -1,4 +1,4 @@
-import type { Article, ArticleAction, Feed, LastRun, Stats } from "./types";
+import type { Article, ArticleAction, Channel, Feed, LastRun, Stats } from "./types";
 
 const TOKEN_KEY = "admin_token";
 
@@ -40,17 +40,55 @@ export async function checkAuth(token: string): Promise<boolean> {
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
-export async function fetchStats(): Promise<Stats> {
-  return (await req("/api/stats")).json();
+export async function fetchStats(channel?: number | null): Promise<Stats> {
+  const q = channel != null ? `?channel=${channel}` : "";
+  return (await req(`/api/stats${q}`)).json();
 }
 
 export async function fetchLastRun(): Promise<LastRun> {
   return (await req("/api/last-run")).json();
 }
 
-export async function fetchArticles(status?: string): Promise<Article[]> {
-  const q = status ? `?status=${encodeURIComponent(status)}` : "";
+export async function fetchArticles(
+  status?: string,
+  channel?: number | null,
+): Promise<Article[]> {
+  const p = new URLSearchParams();
+  if (status) p.set("status", status);
+  if (channel != null) p.set("channel", String(channel));
+  const q = p.toString() ? `?${p.toString()}` : "";
   return (await req(`/api/articles${q}`)).json();
+}
+
+export async function fetchChannels(): Promise<Channel[]> {
+  return (await req("/api/channels")).json();
+}
+
+export async function createChannel(data: Partial<Channel>): Promise<Channel> {
+  const r = await req("/api/channels", {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(data),
+  });
+  if (!r.ok) throw new Error(`create channel: HTTP ${r.status}`);
+  return r.json();
+}
+
+export async function updateChannel(
+  id: number,
+  data: Partial<Channel>,
+): Promise<void> {
+  const r = await req(`/api/channels/${id}`, {
+    method: "PUT",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(data),
+  });
+  if (!r.ok) throw new Error(`update channel: HTTP ${r.status}`);
+}
+
+export async function deleteChannel(id: number): Promise<void> {
+  const r = await req(`/api/channels/${id}`, { method: "DELETE" });
+  if (!r.ok) throw new Error(`delete channel: HTTP ${r.status}`);
 }
 
 export async function runAction(id: number, what: ArticleAction): Promise<void> {

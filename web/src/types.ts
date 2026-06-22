@@ -10,6 +10,25 @@ export interface Article {
   post_text: string | null;
   image_url: string | null;
   scheduled_at: string | null;
+  channel_id: number | null;
+}
+
+export interface Channel {
+  id: number;
+  name: string;
+  bot_token: string;
+  channel_id: string;
+  admin_user_id: string;
+  topic: string;
+  enabled: boolean;
+  relevance_threshold: number;
+  publish_interval_minutes: number;
+  rss_feeds: string;
+  habr_enabled: boolean;
+  habr_hubs: string;
+  arxiv_categories: string;
+  reddit_subreddits: string;
+  searxng_queries: string;
 }
 
 export interface Feed {
