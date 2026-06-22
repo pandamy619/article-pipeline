@@ -192,6 +192,8 @@ async def _publish_due(bot: Bot) -> None:
 
     with get_session() as session:
         ids = due_article_ids(session)
+    if ids:
+        log.info("publish-due: %d article(s) ready", len(ids))
     for aid in ids:
         with get_session() as session:
             post = service.get_post_text(session, aid)
@@ -227,6 +229,10 @@ async def run() -> None:
     )
     scheduler.add_job(_publish_due, "interval", minutes=1, args=[bot])
     scheduler.start()
+    log.info(
+        "scheduler started: pipeline every %s min, publish-due every 1 min",
+        settings.run_interval_minutes,
+    )
     await build_dispatcher().start_polling(bot)
 
 
