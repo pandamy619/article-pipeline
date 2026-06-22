@@ -1,15 +1,18 @@
 import { Fragment, useEffect, useState } from "react";
 import {
+  addFeed,
   type ChatMsg,
   chatArticle,
   collect,
+  deleteFeed,
   fetchArticles,
+  fetchFeeds,
   fetchStats,
   runAction,
   savePost,
   setArticleStatus,
 } from "./api";
-import type { Article, Stats } from "./types";
+import type { Article, Feed, Stats } from "./types";
 
 const STATUSES = ["new", "filtered", "drafted", "pending", "published", "rejected"];
 const STATUS_RU: Record<string, string> = {
@@ -29,6 +32,7 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [openId, setOpenId] = useState<number | null>(null);
   const [mode, setMode] = useState<Mode>("preview");
+  const [showFeeds, setShowFeeds] = useState(false);
 
   async function refresh(current: string) {
     const [a, s] = await Promise.all([
@@ -72,14 +76,21 @@ export default function App() {
           <h1>article-pipeline</h1>
           <p className="sub">панель модерации статей</p>
         </div>
-        <button
-          className="btn btn-primary"
-          disabled={busy}
-          onClick={() => run(() => collect())}
-        >
-          {busy ? "…" : "Собрать сейчас"}
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button className="btn" onClick={() => setShowFeeds((v) => !v)}>
+            Ленты
+          </button>
+          <button
+            className="btn btn-primary"
+            disabled={busy}
+            onClick={() => run(() => collect())}
+          >
+            {busy ? "…" : "Собрать сейчас"}
+          </button>
+        </div>
       </header>
+
+      {showFeeds && <FeedsPanel />}
 
       <nav className="chips">
         <button
@@ -380,6 +391,106 @@ function linkify(text: string) {
     }
     return <span key={i}>{part}</span>;
   });
+}
+
+function FeedsPanel() {
+  const [feeds, setFeeds] = useState<Feed[]>([]);
+  const [url, setUrl] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function load() {
+    setFeeds(await fetchFeeds());
+  }
+  useEffect(() => {
+    load();
+  }, []);
+
+  async function wrap(fn: () => Promise<void>) {
+    setBusy(true);
+    try {
+      await fn();
+      await load();
+    } catch (e) {
+      alert(`Ошибка: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card" style={{ padding: "14px 16px", marginBottom: 16 }}>
+      <div style={{ display: "flex", gap: 7, marginBottom: 12 }}>
+        <input
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key !== "Enter") return;
+            const u = url.trim();
+            if (!u) return;
+            setUrl("");
+            wrap(() => addFeed(u));
+          }}
+          placeholder="https://сайт/feed — добавить RSS-ленту"
+          style={{
+            flex: 1,
+            border: "1px solid var(--line-strong)",
+            borderRadius: 9,
+            padding: "8px 11px",
+            fontSize: 13,
+            fontFamily: "inherit",
+          }}
+        />
+        <button
+          className="btn btn-primary"
+          disabled={busy || !url.trim()}
+          onClick={() => {
+            const u = url.trim();
+            setUrl("");
+            wrap(() => addFeed(u));
+          }}
+        >
+          Добавить
+        </button>
+      </div>
+      <table className="tbl">
+        <tbody>
+          {feeds.map((f, i) => (
+            <tr className="row" key={i}>
+              <td className="muted" style={{ width: 56 }}>
+                {f.source === "env" ? "env" : `#${f.id}`}
+              </td>
+              <td>
+                <a className="title" href={f.url} target="_blank" rel="noreferrer">
+                  {f.url}
+                </a>
+              </td>
+              <td style={{ width: 40, textAlign: "right" }}>
+                {f.source === "db" && f.id != null && (
+                  <button
+                    className="icon"
+                    title="удалить ленту"
+                    disabled={busy}
+                    onClick={() => wrap(() => deleteFeed(f.id as number))}
+                  >
+                    🗑
+                  </button>
+                )}
+              </td>
+            </tr>
+          ))}
+          {feeds.length === 0 && (
+            <tr>
+              <td className="muted">Лент пока нет</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+      <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+        Ленты <b>env</b> задаются в .env и здесь не удаляются. Добавленные тут
+        применяются со следующего сбора.
+      </div>
+    </div>
+  );
 }
 
 function TelegramView({ text, image }: { text: string; image?: string | null }) {

@@ -11,6 +11,13 @@ export interface Article {
   image_url: string | null;
 }
 
+export interface Feed {
+  id: number | null;
+  url: string;
+  enabled: boolean;
+  source: string;
+}
+
 export type Stats = Record<string, number>;
 
 export type ArticleAction = "draft" | "publish" | "reject";

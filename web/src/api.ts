@@ -1,4 +1,4 @@
-import type { Article, ArticleAction, Stats } from "./types";
+import type { Article, ArticleAction, Feed, Stats } from "./types";
 
 export async function fetchStats(): Promise<Stats> {
   const r = await fetch("/api/stats");
@@ -55,6 +55,25 @@ export async function revisePost(id: number, instruction: string): Promise<strin
   });
   const data = await r.json();
   return (data.post as string) ?? "";
+}
+
+export async function fetchFeeds(): Promise<Feed[]> {
+  const r = await fetch("/api/feeds");
+  return r.json();
+}
+
+export async function addFeed(url: string): Promise<void> {
+  const r = await fetch("/api/feeds", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url }),
+  });
+  if (!r.ok) throw new Error(`add feed: HTTP ${r.status}`);
+}
+
+export async function deleteFeed(id: number): Promise<void> {
+  const r = await fetch(`/api/feeds/${id}`, { method: "DELETE" });
+  if (!r.ok) throw new Error(`delete feed: HTTP ${r.status}`);
 }
 
 export interface ChatMsg {
