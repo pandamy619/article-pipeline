@@ -361,7 +361,7 @@ export default function App() {
               <th style={{ width: 56 }}>оценка</th>
               <th>заголовок и причина</th>
               <th style={{ width: 100 }}>источник</th>
-              <th style={{ width: 132 }}>действия</th>
+              <th style={{ width: 230 }}>действия</th>
             </tr>
           </thead>
           <tbody>
@@ -409,7 +409,7 @@ export default function App() {
                     {a.relevance_reason && <div className="reason">{a.relevance_reason}</div>}
                     {a.status === "scheduled" && a.scheduled_at && (
                       <div className="reason">
-                        🕒 в очереди на {new Date(a.scheduled_at).toLocaleString()}
+                        в очереди на {new Date(a.scheduled_at).toLocaleString()}
                       </div>
                     )}
                   </td>
@@ -419,27 +419,24 @@ export default function App() {
                       {a.post_text ? (
                         <>
                           <button
-                            className={`icon${
+                            className={`act${
                               openId === a.id && mode === "preview" ? " on" : ""
                             }`}
-                            title="превью"
                             onClick={() => toggle(a.id, "preview")}
                           >
-                            👁
+                            превью
                           </button>
                           <button
-                            className={`icon${
+                            className={`act${
                               openId === a.id && mode === "edit" ? " on" : ""
                             }`}
-                            title="редактировать"
                             onClick={() => toggle(a.id, "edit")}
                           >
-                            ✏️
+                            правка
                           </button>
                           {a.status !== "published" && (
                             <button
-                              className="icon"
-                              title="опубликовать в канал"
+                              className="act"
                               disabled={busy}
                               onClick={() => {
                                 if (confirm("Опубликовать пост в Telegram-канал?")) {
@@ -447,29 +444,27 @@ export default function App() {
                                 }
                               }}
                             >
-                              🚀
+                              опубликовать
                             </button>
                           )}
                           {a.status !== "published" && (
                             <button
-                              className={`icon${
+                              className={`act${
                                 openId === a.id && mode === "schedule" ? " on" : ""
                               }`}
-                              title="запланировать публикацию"
                               onClick={() => toggle(a.id, "schedule")}
                             >
-                              ⏰
+                              в очередь
                             </button>
                           )}
                         </>
                       ) : (
                         <button
-                          className="icon"
-                          title="сгенерировать пост"
+                          className="act"
                           disabled={busy}
                           onClick={() => run(() => runAction(a.id, "draft"))}
                         >
-                          ✍️
+                          сделать пост
                         </button>
                       )}
                     </div>
@@ -597,7 +592,7 @@ function PreviewPanel({
       <div className="col">
         <div className="toolbar">
           <button className="btn" onClick={onEdit}>
-            ✏️ Редактировать
+            Редактировать
           </button>
         </div>
         <TelegramView text={text} image={image} />
@@ -647,7 +642,7 @@ function EditPanel({
         ...next,
         {
           role: "assistant",
-          content: `⚠️ ошибка: ${e instanceof Error ? e.message : String(e)}`,
+          content: `ошибка: ${e instanceof Error ? e.message : String(e)}`,
         },
       ]);
     } finally {
@@ -660,7 +655,7 @@ function EditPanel({
       <div className="col">
         <div className="toolbar">
           <button className="btn" onClick={onPreview}>
-            👁 Превью
+            Превью
           </button>
           <button className="btn btn-primary" disabled={working} onClick={save}>
             Сохранить
@@ -686,7 +681,7 @@ function EditPanel({
               <div className={`msg ${m.role}`}>{m.content}</div>
               {m.role === "assistant" && (
                 <button className="msg-apply" onClick={() => setText(m.content)}>
-                  ↧ вставить в пост
+                  вставить в пост
                 </button>
               )}
             </Fragment>
@@ -703,7 +698,7 @@ function EditPanel({
             placeholder="напиши сообщение…"
           />
           <button className="btn btn-primary" disabled={working} onClick={send}>
-            ➤
+            Отправить
           </button>
         </div>
       </div>
@@ -833,7 +828,7 @@ function LastRunLine({ run }: { run: LastRun }) {
   if (run.ok === false) {
     return (
       <div style={{ fontSize: 12, marginBottom: 12, color: "#c02626" }}>
-        ⚠️ последний прогон упал{run.error ? `: ${run.error}` : ""} · {when}
+        Сбой прогона{run.error ? `: ${run.error}` : ""} · {when}
       </div>
     );
   }
@@ -1330,15 +1325,14 @@ function FeedsPanel() {
                   {f.url}
                 </a>
               </td>
-              <td style={{ width: 40, textAlign: "right" }}>
+              <td style={{ width: 80, textAlign: "right" }}>
                 {f.source === "db" && f.id != null && (
                   <button
-                    className="icon"
-                    title="удалить ленту"
+                    className="act"
                     disabled={busy}
                     onClick={() => wrap(() => deleteFeed(f.id as number))}
                   >
-                    🗑
+                    удалить
                   </button>
                 )}
               </td>
