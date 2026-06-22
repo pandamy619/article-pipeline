@@ -1,23 +1,60 @@
 import type { Article, ArticleAction, Feed, LastRun, Stats } from "./types";
 
+const TOKEN_KEY = "admin_token";
+
+export function getToken(): string {
+  return localStorage.getItem(TOKEN_KEY) ?? "";
+}
+export function setToken(t: string): void {
+  localStorage.setItem(TOKEN_KEY, t);
+}
+export function clearToken(): void {
+  localStorage.removeItem(TOKEN_KEY);
+}
+
+export class AuthError extends Error {}
+
+function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  const t = getToken();
+  return t ? { ...extra, Authorization: `Bearer ${t}` } : extra;
+}
+
+async function req(path: string, opts: RequestInit = {}): Promise<Response> {
+  const r = await fetch(path, {
+    ...opts,
+    headers: authHeaders((opts.headers as Record<string, string>) ?? {}),
+  });
+  if (r.status === 401) {
+    clearToken();
+    throw new AuthError("unauthorized");
+  }
+  return r;
+}
+
+export async function checkAuth(token: string): Promise<boolean> {
+  const r = await fetch("/api/auth/check", {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  return r.ok;
+}
+
+const JSON_HEADERS = { "Content-Type": "application/json" };
+
 export async function fetchStats(): Promise<Stats> {
-  const r = await fetch("/api/stats");
-  return r.json();
+  return (await req("/api/stats")).json();
 }
 
 export async function fetchLastRun(): Promise<LastRun> {
-  const r = await fetch("/api/last-run");
-  return r.json();
+  return (await req("/api/last-run")).json();
 }
 
 export async function fetchArticles(status?: string): Promise<Article[]> {
   const q = status ? `?status=${encodeURIComponent(status)}` : "";
-  const r = await fetch(`/api/articles${q}`);
-  return r.json();
+  return (await req(`/api/articles${q}`)).json();
 }
 
 export async function runAction(id: number, what: ArticleAction): Promise<void> {
-  const r = await fetch(`/api/articles/${id}/${what}`, { method: "POST" });
+  const r = await req(`/api/articles/${id}/${what}`, { method: "POST" });
   if (!r.ok) throw new Error(`${what}: HTTP ${r.status}`);
   const data = await r.json().catch(() => ({}));
   if (data && data.ok === false) {
@@ -29,9 +66,9 @@ export async function scheduleArticle(
   id: number,
   when: string | null,
 ): Promise<void> {
-  const r = await fetch(`/api/articles/${id}/schedule`, {
+  const r = await req(`/api/articles/${id}/schedule`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: JSON_HEADERS,
     body: JSON.stringify({ when }),
   });
   if (!r.ok) throw new Error(`schedule: HTTP ${r.status}`);
@@ -42,14 +79,14 @@ export async function scheduleArticle(
 }
 
 export async function unscheduleArticle(id: number): Promise<void> {
-  const r = await fetch(`/api/articles/${id}/unschedule`, { method: "POST" });
+  const r = await req(`/api/articles/${id}/unschedule`, { method: "POST" });
   if (!r.ok) throw new Error(`unschedule: HTTP ${r.status}`);
 }
 
 export async function setArticleStatus(id: number, status: string): Promise<void> {
-  const r = await fetch(`/api/articles/${id}/status`, {
+  const r = await req(`/api/articles/${id}/status`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: JSON_HEADERS,
     body: JSON.stringify({ status }),
   });
   if (!r.ok) throw new Error(`status: HTTP ${r.status}`);
@@ -60,23 +97,23 @@ export async function setArticleStatus(id: number, status: string): Promise<void
 }
 
 export async function collect(): Promise<void> {
-  const r = await fetch("/api/collect", { method: "POST" });
+  const r = await req("/api/collect", { method: "POST" });
   if (!r.ok) throw new Error(`collect: HTTP ${r.status}`);
 }
 
 export async function savePost(id: number, text: string): Promise<void> {
-  const r = await fetch(`/api/articles/${id}/post`, {
+  const r = await req(`/api/articles/${id}/post`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: JSON_HEADERS,
     body: JSON.stringify({ text }),
   });
   if (!r.ok) throw new Error(`save: HTTP ${r.status}`);
 }
 
 export async function revisePost(id: number, instruction: string): Promise<string> {
-  const r = await fetch(`/api/articles/${id}/revise`, {
+  const r = await req(`/api/articles/${id}/revise`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: JSON_HEADERS,
     body: JSON.stringify({ instruction }),
   });
   const data = await r.json();
@@ -84,21 +121,20 @@ export async function revisePost(id: number, instruction: string): Promise<strin
 }
 
 export async function fetchFeeds(): Promise<Feed[]> {
-  const r = await fetch("/api/feeds");
-  return r.json();
+  return (await req("/api/feeds")).json();
 }
 
 export async function addFeed(url: string): Promise<void> {
-  const r = await fetch("/api/feeds", {
+  const r = await req("/api/feeds", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: JSON_HEADERS,
     body: JSON.stringify({ url }),
   });
   if (!r.ok) throw new Error(`add feed: HTTP ${r.status}`);
 }
 
 export async function deleteFeed(id: number): Promise<void> {
-  const r = await fetch(`/api/feeds/${id}`, { method: "DELETE" });
+  const r = await req(`/api/feeds/${id}`, { method: "DELETE" });
   if (!r.ok) throw new Error(`delete feed: HTTP ${r.status}`);
 }
 
@@ -108,9 +144,9 @@ export interface ChatMsg {
 }
 
 export async function chatArticle(id: number, messages: ChatMsg[]): Promise<string> {
-  const r = await fetch(`/api/articles/${id}/chat`, {
+  const r = await req(`/api/articles/${id}/chat`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: JSON_HEADERS,
     body: JSON.stringify({ messages }),
   });
   const data = await r.json();

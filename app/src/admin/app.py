@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy import func, select
@@ -18,13 +18,31 @@ from src.publisher.queue import parse_when, schedule_article, unschedule
 
 setup_logging()
 
-app = FastAPI(title="article-pipeline admin API")
+
+def require_auth(authorization: str | None = Header(default=None)) -> None:
+    """Защита админки токеном. Пустой ADMIN_TOKEN -> авторизация выключена."""
+    token = settings.admin_token
+    if not token:
+        return
+    if authorization != f"Bearer {token}":
+        raise HTTPException(status_code=401, detail="unauthorized")
+
+
+app = FastAPI(
+    title="article-pipeline admin API",
+    dependencies=[Depends(require_auth)],
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.get("/api/auth/check")
+def auth_check() -> dict[str, bool]:
+    return {"ok": True}
 
 
 class ArticleOut(BaseModel):

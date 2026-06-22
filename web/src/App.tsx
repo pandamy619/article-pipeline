@@ -1,18 +1,23 @@
 import { Fragment, useEffect, useState } from "react";
 import {
   addFeed,
+  AuthError,
   type ChatMsg,
   chatArticle,
+  checkAuth,
+  clearToken,
   collect,
   deleteFeed,
   fetchArticles,
   fetchFeeds,
+  getToken,
   fetchLastRun,
   fetchStats,
   runAction,
   savePost,
   scheduleArticle,
   setArticleStatus,
+  setToken,
   unscheduleArticle,
 } from "./api";
 import type { Article, Feed, LastRun, Stats } from "./types";
@@ -46,16 +51,22 @@ export default function App() {
   const [openId, setOpenId] = useState<number | null>(null);
   const [mode, setMode] = useState<Mode>("preview");
   const [showFeeds, setShowFeeds] = useState(false);
+  const [needLogin, setNeedLogin] = useState(false);
 
   async function refresh(current: string) {
-    const [a, s, lr] = await Promise.all([
-      fetchArticles(current || undefined),
-      fetchStats(),
-      fetchLastRun(),
-    ]);
-    setArticles(a);
-    setStats(s);
-    setLastRun(lr);
+    try {
+      const [a, s, lr] = await Promise.all([
+        fetchArticles(current || undefined),
+        fetchStats(),
+        fetchLastRun(),
+      ]);
+      setArticles(a);
+      setStats(s);
+      setLastRun(lr);
+    } catch (e) {
+      if (e instanceof AuthError) setNeedLogin(true);
+      else throw e;
+    }
   }
 
   useEffect(() => {
@@ -68,7 +79,8 @@ export default function App() {
       await fn();
       await refresh(filter);
     } catch (e) {
-      alert(`Ошибка: ${e instanceof Error ? e.message : String(e)}`);
+      if (e instanceof AuthError) setNeedLogin(true);
+      else alert(`Ошибка: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setBusy(false);
     }
@@ -80,6 +92,17 @@ export default function App() {
       setOpenId(id);
       setMode(m);
     }
+  }
+
+  if (needLogin) {
+    return (
+      <Login
+        onSuccess={() => {
+          setNeedLogin(false);
+          refresh(filter);
+        }}
+      />
+    );
   }
 
   return (
@@ -102,6 +125,18 @@ export default function App() {
           >
             {busy ? "…" : "Собрать сейчас"}
           </button>
+          {getToken() && (
+            <button
+              className="btn"
+              title="выйти"
+              onClick={() => {
+                clearToken();
+                setNeedLogin(true);
+              }}
+            >
+              Выйти
+            </button>
+          )}
         </div>
       </header>
 
@@ -278,6 +313,71 @@ export default function App() {
             )}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+function Login({ onSuccess }: { onSuccess: () => void }) {
+  const [token, setTok] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function submit() {
+    setBusy(true);
+    setErr("");
+    try {
+      if (await checkAuth(token.trim())) {
+        setToken(token.trim());
+        onSuccess();
+      } else {
+        setErr("Неверный токен");
+      }
+    } catch {
+      setErr("Ошибка сети");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="app">
+      <div
+        className="card"
+        style={{ maxWidth: 360, margin: "64px auto", padding: "24px 22px" }}
+      >
+        <h1 style={{ margin: "0 0 4px" }}>Вход в админку</h1>
+        <p className="sub" style={{ marginBottom: 16 }}>
+          Введите токен (ADMIN_TOKEN из .env)
+        </p>
+        <input
+          type="password"
+          value={token}
+          onChange={(e) => setTok(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && token.trim()) submit();
+          }}
+          placeholder="токен"
+          style={{
+            width: "100%",
+            border: "1px solid var(--line-strong)",
+            borderRadius: 9,
+            padding: "9px 11px",
+            fontSize: 14,
+            marginBottom: 10,
+          }}
+        />
+        {err && (
+          <div style={{ color: "#c02626", fontSize: 13, marginBottom: 10 }}>{err}</div>
+        )}
+        <button
+          className="btn btn-primary"
+          disabled={busy || !token.trim()}
+          onClick={submit}
+          style={{ width: "100%" }}
+        >
+          Войти
+        </button>
       </div>
     </div>
   );

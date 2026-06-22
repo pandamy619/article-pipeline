@@ -154,6 +154,21 @@ def test_schedule_explicit_time(client):
     assert "2030-01-01" in r["scheduled_at"]
 
 
+def test_auth_required_when_token_set(client, monkeypatch):
+    import src.config
+
+    monkeypatch.setattr(src.config.settings, "admin_token", "secret")
+    assert client.get("/api/stats").status_code == 401
+    ok = client.get("/api/stats", headers={"Authorization": "Bearer secret"})
+    assert ok.status_code == 200
+    assert (
+        client.get(
+            "/api/auth/check", headers={"Authorization": "Bearer secret"}
+        ).status_code
+        == 200
+    )
+
+
 def test_last_run_empty(client):
     assert client.get("/api/last-run").json() == {"exists": False}
 
