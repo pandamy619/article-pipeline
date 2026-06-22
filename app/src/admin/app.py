@@ -79,6 +79,23 @@ def reject_article(article_id: int) -> dict[str, bool]:
     return {"ok": True}
 
 
+class StatusIn(BaseModel):
+    status: str
+
+
+@app.post("/api/articles/{article_id}/status")
+def set_status(article_id: int, body: StatusIn) -> dict[str, bool]:
+    try:
+        new_status = ArticleStatus(body.status)
+    except ValueError:
+        return {"ok": False}
+    with get_session() as session:
+        rec = session.get(ArticleRecord, article_id)
+        if rec:
+            rec.status = new_status
+    return {"ok": True}
+
+
 @app.post("/api/articles/{article_id}/draft")
 async def draft_article(article_id: int) -> dict[str, bool]:
     def _make() -> None:
