@@ -55,6 +55,11 @@ class Settings(BaseSettings):
     reddit_period: str = "week"  # hour|day|week|month|year|all
     reddit_limit: int = 10
 
+    # Веб-поиск (SearXNG; пустые запросы = выключено)
+    searxng_queries: str = ""  # запросы через запятую
+    searxng_language: str = "ru"
+    searxng_max_results: int = 10
+
     @staticmethod
     def _split(raw: str) -> list[str]:
         """Список из значения env: терпит инлайн-комментарии и мусор.
@@ -86,6 +91,10 @@ class Settings(BaseSettings):
     @property
     def reddit_subreddit_list(self) -> list[str]:
         return self._split(self.reddit_subreddits)
+
+    @property
+    def searxng_query_list(self) -> list[str]:
+        return self._split(self.searxng_queries)
 
 
 settings = Settings()

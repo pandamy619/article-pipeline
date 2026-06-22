@@ -13,6 +13,7 @@ from src.collectors.base import Article
 from src.collectors.habr import collect_habr
 from src.collectors.reddit import collect_reddit
 from src.collectors.rss import collect_rss
+from src.collectors.websearch import collect_websearch
 from src.config import settings
 
 
@@ -67,6 +68,15 @@ def collect_all(feeds: Iterable[str] | None = None) -> list[Article]:
                 settings.reddit_subreddit_list,
                 period=settings.reddit_period,
                 limit=settings.reddit_limit,
+            ),
+        )
+    if settings.searxng_query_list:
+        _safe(
+            "websearch",
+            lambda: collect_websearch(
+                settings.searxng_query_list,
+                language=settings.searxng_language,
+                max_results=settings.searxng_max_results,
             ),
         )
     return _interleave(buckets)
