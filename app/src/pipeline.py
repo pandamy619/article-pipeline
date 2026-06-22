@@ -12,6 +12,7 @@ from src.collectors.sources import collect_all
 from src.config import settings
 from src.db.repo import save_articles
 from src.dedup.semantic import DedupResult, apply_semantic_dedup
+from src.feeds.service import effective_feeds
 from src.filter.relevance import Scorer
 from src.filter.service import apply_relevance_filter
 from src.rewrite.service import apply_rewrite
@@ -40,7 +41,7 @@ def run_pipeline(
     feeds: list[str] | None = None,
 ) -> PipelineResult:
     """Один полный прогон: RSS -> дедуп -> фильтр релевантности -> рерайт в черновики."""
-    feeds = feeds if feeds is not None else settings.rss_feed_list
+    feeds = feeds if feeds is not None else effective_feeds(session)
     articles = list(collector(feeds))
     if settings.max_articles_per_run:
         articles = articles[: settings.max_articles_per_run]

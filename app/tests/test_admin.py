@@ -113,6 +113,19 @@ def test_revise(client, monkeypatch):
     assert "переписанный пост" in data["post"]
 
 
+def test_feeds_api_add_list_delete(client):
+    r = client.post("/api/feeds", json={"url": "https://x.com/feed"})
+    assert r.json()["ok"] is True
+    fid = r.json()["id"]
+
+    feeds = client.get("/api/feeds").json()
+    assert any(f["url"] == "https://x.com/feed" and f["source"] == "db" for f in feeds)
+
+    assert client.delete(f"/api/feeds/{fid}").json() == {"ok": True}
+    feeds2 = client.get("/api/feeds").json()
+    assert not any(f["url"] == "https://x.com/feed" for f in feeds2)
+
+
 def test_chat(client, monkeypatch):
     import src.llm.client as llm
 

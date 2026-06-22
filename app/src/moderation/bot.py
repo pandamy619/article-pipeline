@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 
 from aiogram import Bot, Dispatcher, F, Router
-from aiogram.filters import Command
+from aiogram.filters import Command, CommandObject
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message
@@ -13,6 +13,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from src.config import settings
 from src.db.base import get_session
+from src.feeds import service as feeds_service
 from src.llm.client import OllamaClient
 from src.moderation import service
 from src.moderation.keyboards import review_keyboard
@@ -51,6 +52,52 @@ async def cmd_review(message: Message, bot: Bot) -> None:
         return
     n = await send_drafts(bot)
     await message.answer(f"На модерацию отправлено: {n}")
+
+
+@router.message(Command("feeds"))
+async def cmd_feeds(message: Message) -> None:
+    if message.from_user and message.from_user.id != _admin_id():
+        return
+    with get_session() as session:
+        db_feeds = feeds_service.list_feeds(session)
+    env_lines = [f"• {u}" for u in settings.rss_feed_list] or ["  (нет)"]
+    db_lines = [f"#{f.id} {'✅' if f.enabled else '🚫'} {f.url}" for f in db_feeds] or [
+        "  (нет)"
+    ]
+    await message.answer(
+        "📡 Базовые ленты (.env, правятся в файле):\n"
+        + "\n".join(env_lines)
+        + "\n\n🗂 Ленты в БД (/delfeed <id>):\n"
+        + "\n".join(db_lines)
+        + "\n\nДобавить: /addfeed <url>"
+    )
+
+
+@router.message(Command("addfeed"))
+async def cmd_addfeed(message: Message, command: CommandObject) -> None:
+    if message.from_user and message.from_user.id != _admin_id():
+        return
+    url = (command.args or "").strip()
+    if not url:
+        await message.answer("Использование: /addfeed <url>")
+        return
+    with get_session() as session:
+        feed = feeds_service.add_feed(session, url)
+        reply = f"Добавлено #{feed.id}: {feed.url}" if feed else "Не вышло"
+    await message.answer(reply)
+
+
+@router.message(Command("delfeed"))
+async def cmd_delfeed(message: Message, command: CommandObject) -> None:
+    if message.from_user and message.from_user.id != _admin_id():
+        return
+    raw = (command.args or "").strip()
+    if not raw.isdigit():
+        await message.answer("Использование: /delfeed <id> (id см. в /feeds)")
+        return
+    with get_session() as session:
+        ok = feeds_service.remove_feed(session, int(raw))
+    await message.answer("Удалено ✅" if ok else "Лента не найдена")
 
 
 @router.callback_query(F.data.startswith(f"{service.CALLBACK_PREFIX}:"))

@@ -12,6 +12,7 @@ from sqlalchemy import func, select
 from src.config import settings
 from src.db.base import get_session
 from src.db.models import ArticleRecord, ArticleStatus
+from src.feeds import service as feeds_service
 from src.log import setup_logging
 
 setup_logging()
@@ -235,6 +236,45 @@ async def chat(article_id: int, body: ChatIn) -> dict[str, str]:
 
     reply = await asyncio.to_thread(_chat)
     return {"reply": reply}
+
+
+class FeedOut(BaseModel):
+    id: int | None
+    url: str
+    enabled: bool
+    source: str  # "env" (из .env, не удаляется) или "db" (управляется тут)
+
+
+class FeedIn(BaseModel):
+    url: str
+
+
+@app.get("/api/feeds")
+def list_feeds_api() -> list[FeedOut]:
+    with get_session() as session:
+        env = [
+            FeedOut(id=None, url=u, enabled=True, source="env")
+            for u in settings.rss_feed_list
+        ]
+        db = [
+            FeedOut(id=f.id, url=f.url, enabled=f.enabled, source="db")
+            for f in feeds_service.list_feeds(session)
+        ]
+    return env + db
+
+
+@app.post("/api/feeds")
+def add_feed_api(body: FeedIn) -> dict[str, object]:
+    with get_session() as session:
+        feed = feeds_service.add_feed(session, body.url)
+        return {"ok": bool(feed), "id": feed.id if feed else None}
+
+
+@app.delete("/api/feeds/{feed_id}")
+def delete_feed_api(feed_id: int) -> dict[str, bool]:
+    with get_session() as session:
+        ok = feeds_service.remove_feed(session, feed_id)
+    return {"ok": ok}
 
 
 @app.post("/api/collect")
