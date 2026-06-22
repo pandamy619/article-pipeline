@@ -11,7 +11,9 @@ from src.collectors.rss import fetch_article_text
 from src.config import settings
 
 
-def _search(query: str, *, base_url: str, language: str, max_results: int) -> list[dict]:
+def _search(
+    query: str, *, base_url: str, language: str, max_results: int
+) -> list[dict]:
     resp = httpx.get(
         f"{base_url.rstrip('/')}/search",
         params={"q": query, "format": "json", "language": language, "safesearch": 0},

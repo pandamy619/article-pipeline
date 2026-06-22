@@ -39,7 +39,9 @@ def collect_reddit(
             d = child.get("data", {})
             title = (d.get("title") or "").strip()
             permalink = d.get("permalink") or ""
-            url = f"https://www.reddit.com{permalink}" if permalink else d.get("url", "")
+            url = (
+                f"https://www.reddit.com{permalink}" if permalink else d.get("url", "")
+            )
             if not url:
                 continue
             created = d.get("created_utc")

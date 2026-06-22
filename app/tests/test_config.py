@@ -11,7 +11,10 @@ def test_split_empty():
 
 def test_split_strips_inline_comment():
     # инлайн-комментарий после значения не должен попасть в список
-    assert Settings._split("programming,python   # коммент") == ["programming", "python"]
+    assert Settings._split("programming,python   # коммент") == [
+        "programming",
+        "python",
+    ]
 
 
 def test_split_drops_comment_only_value():

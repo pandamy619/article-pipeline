@@ -103,7 +103,9 @@ def apply_semantic_dedup(
 
         if best_sim >= thr:
             rec.status = ArticleStatus.rejected
-            rec.relevance_reason = f"семантический дубликат (похоже на: {best_title[:80]})"
+            rec.relevance_reason = (
+                f"семантический дубликат (похоже на: {best_title[:80]})"
+            )
             duplicates += 1
         else:
             rec.embedding = json.dumps(emb)
