@@ -194,6 +194,64 @@ async def publish_article(article_id: int) -> dict[str, bool]:
     return {"ok": True}
 
 
+class BulkIn(BaseModel):
+    ids: list[int]
+    action: str  # reject | queue | unqueue | publish
+
+
+@app.post("/api/articles/bulk")
+async def bulk_action(body: BulkIn) -> dict[str, object]:
+    if body.action in {"reject", "queue", "unqueue"}:
+        done = 0
+        with get_session() as session:
+            for aid in body.ids:
+                if body.action == "reject":
+                    rec = session.get(ArticleRecord, aid)
+                    if rec and rec.status != ArticleStatus.published:
+                        rec.status = ArticleStatus.rejected
+                        done += 1
+                elif body.action == "queue":
+                    if schedule_article(session, aid):
+                        done += 1
+                elif unschedule(session, aid):
+                    done += 1
+        return {"ok": True, "done": done}
+
+    if body.action == "publish":
+        from aiogram import Bot
+
+        from src.publisher.telegram import publish
+
+        done = 0
+        bot = Bot(settings.telegram_bot_token)
+        try:
+            for aid in body.ids:
+                with get_session() as session:
+                    rec = session.get(ArticleRecord, aid)
+                    post = rec.post_text if rec else None
+                    image = rec.image_url if rec else None
+                    published = rec and rec.status == ArticleStatus.published
+                if not post or published:
+                    continue
+                try:
+                    mid = await publish(
+                        bot, settings.telegram_channel_id, post, image_url=image
+                    )
+                except Exception:  # noqa: BLE001 — одна не должна ронять пачку
+                    continue
+                with get_session() as session:
+                    rec = session.get(ArticleRecord, aid)
+                    if rec:
+                        rec.tg_message_id = mid
+                        rec.status = ArticleStatus.published
+                done += 1
+        finally:
+            await bot.session.close()
+        return {"ok": True, "done": done}
+
+    return {"ok": False, "done": 0}
+
+
 class PostUpdate(BaseModel):
     text: str
 

@@ -2,6 +2,7 @@ import { Fragment, useEffect, useState } from "react";
 import {
   addFeed,
   AuthError,
+  bulkAction,
   type ChatMsg,
   chatArticle,
   checkAuth,
@@ -52,6 +53,7 @@ export default function App() {
   const [mode, setMode] = useState<Mode>("preview");
   const [showFeeds, setShowFeeds] = useState(false);
   const [needLogin, setNeedLogin] = useState(false);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
 
   async function refresh(current: string) {
     try {
@@ -70,8 +72,27 @@ export default function App() {
   }
 
   useEffect(() => {
+    setSelected(new Set());
     refresh(filter);
   }, [filter]);
+
+  function toggleSel(id: number) {
+    setSelected((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  }
+
+  function runBulk(action: string) {
+    const ids = [...selected];
+    if (!ids.length) return;
+    run(async () => {
+      await bulkAction(ids, action);
+      setSelected(new Set());
+    });
+  }
 
   async function run(fn: () => Promise<void>) {
     setBusy(true);
@@ -144,6 +165,49 @@ export default function App() {
 
       {lastRun?.exists && <LastRunLine run={lastRun} />}
 
+      {selected.size > 0 && (
+        <div
+          className="card"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            padding: "10px 14px",
+            marginBottom: 12,
+            flexWrap: "wrap",
+          }}
+        >
+          <span style={{ fontWeight: 500 }}>Выбрано {selected.size}</span>
+          <button className="btn" disabled={busy} onClick={() => runBulk("queue")}>
+            В очередь
+          </button>
+          <button className="btn" disabled={busy} onClick={() => runBulk("unqueue")}>
+            Снять с очереди
+          </button>
+          <button className="btn" disabled={busy} onClick={() => runBulk("reject")}>
+            Отклонить
+          </button>
+          <button
+            className="btn"
+            disabled={busy}
+            onClick={() => {
+              if (confirm(`Опубликовать ${selected.size} статей в канал сейчас?`)) {
+                runBulk("publish");
+              }
+            }}
+          >
+            Опубликовать
+          </button>
+          <button
+            className="btn"
+            style={{ marginLeft: "auto" }}
+            onClick={() => setSelected(new Set())}
+          >
+            Снять выделение
+          </button>
+        </div>
+      )}
+
       <nav className="chips">
         <button
           className={`chip${filter === "" ? " active" : ""}`}
@@ -166,6 +230,19 @@ export default function App() {
         <table className="tbl">
           <thead>
             <tr>
+              <th style={{ width: 30 }}>
+                <input
+                  type="checkbox"
+                  checked={articles.length > 0 && selected.size === articles.length}
+                  onChange={(e) =>
+                    setSelected(
+                      e.target.checked
+                        ? new Set(articles.map((a) => a.id))
+                        : new Set(),
+                    )
+                  }
+                />
+              </th>
               <th style={{ width: 36 }}>#</th>
               <th style={{ width: 158 }}>статус</th>
               <th style={{ width: 56 }}>оценка</th>
@@ -178,6 +255,13 @@ export default function App() {
             {articles.map((a) => (
               <Fragment key={a.id}>
                 <tr className="row">
+                  <td>
+                    <input
+                      type="checkbox"
+                      checked={selected.has(a.id)}
+                      onChange={() => toggleSel(a.id)}
+                    />
+                  </td>
                   <td className="muted">{a.id}</td>
                   <td>
                     <select
@@ -280,7 +364,7 @@ export default function App() {
                 </tr>
                 {openId === a.id && a.post_text && (
                   <tr>
-                    <td colSpan={6} className="panel-cell">
+                    <td colSpan={7} className="panel-cell">
                       {mode === "preview" ? (
                         <PreviewPanel
                           text={a.post_text}
@@ -306,7 +390,7 @@ export default function App() {
             ))}
             {articles.length === 0 && (
               <tr>
-                <td colSpan={6}>
+                <td colSpan={7}>
                   <div className="empty">Здесь пока пусто</div>
                 </td>
               </tr>

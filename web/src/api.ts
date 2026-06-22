@@ -120,6 +120,17 @@ export async function revisePost(id: number, instruction: string): Promise<strin
   return (data.post as string) ?? "";
 }
 
+export async function bulkAction(ids: number[], action: string): Promise<number> {
+  const r = await req("/api/articles/bulk", {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ ids, action }),
+  });
+  if (!r.ok) throw new Error(`bulk: HTTP ${r.status}`);
+  const data = await r.json().catch(() => ({}));
+  return (data.done as number) ?? 0;
+}
+
 export async function fetchFeeds(): Promise<Feed[]> {
   return (await req("/api/feeds")).json();
 }

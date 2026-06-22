@@ -154,6 +154,41 @@ def test_schedule_explicit_time(client):
     assert "2030-01-01" in r["scheduled_at"]
 
 
+def test_bulk_queue_then_reject(client):
+    s = db_base.SessionLocal()
+    s.get(ArticleRecord, 1).post_text = "пост"
+    s.add(
+        ArticleRecord(
+            url="https://e.com/2",
+            content_hash="h2",
+            title="t2",
+            text="x",
+            source="s",
+            status=ArticleStatus.drafted,
+            post_text="пост2",
+        )
+    )
+    s.commit()
+    s.close()
+
+    r = client.post(
+        "/api/articles/bulk", json={"ids": [1, 2], "action": "queue"}
+    ).json()
+    assert r["ok"] is True
+    assert r["done"] == 2
+    s = db_base.SessionLocal()
+    assert s.get(ArticleRecord, 1).status == ArticleStatus.scheduled
+    s.close()
+
+    r = client.post(
+        "/api/articles/bulk", json={"ids": [1, 2], "action": "reject"}
+    ).json()
+    assert r["done"] == 2
+    s = db_base.SessionLocal()
+    assert s.get(ArticleRecord, 2).status == ArticleStatus.rejected
+    s.close()
+
+
 def test_auth_required_when_token_set(client, monkeypatch):
     import src.config
 
