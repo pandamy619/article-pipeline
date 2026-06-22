@@ -92,3 +92,12 @@ class RunLog(Base):
     drafted: Mapped[int] = mapped_column(Integer, default=0)
     ok: Mapped[bool] = mapped_column(Boolean, default=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class AppSetting(Base):
+    """Рантайм-настройка (key/value) поверх .env, редактируется из админки."""
+
+    __tablename__ = "app_settings"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(Text, default="")

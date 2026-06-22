@@ -17,11 +17,12 @@ def _collect_once() -> None:
     from src.llm.client import OllamaClient
     from src.log import setup_logging
     from src.pipeline import run_pipeline
+    from src.settings_store import apply_overrides
 
     setup_logging()
-    client = OllamaClient()
     with get_session() as session:
-        result = run_pipeline(session, client)
+        apply_overrides(session)
+        result = run_pipeline(session, OllamaClient())
     log.info("pipeline result: %s", result)
 
 

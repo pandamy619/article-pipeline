@@ -120,6 +120,24 @@ export async function revisePost(id: number, instruction: string): Promise<strin
   return (data.post as string) ?? "";
 }
 
+export interface SettingsResponse {
+  settings: Record<string, unknown>;
+  types: Record<string, string>;
+}
+
+export async function fetchSettings(): Promise<SettingsResponse> {
+  return (await req("/api/settings")).json();
+}
+
+export async function saveSetting(key: string, value: string): Promise<void> {
+  const r = await req("/api/settings", {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ key, value }),
+  });
+  if (!r.ok) throw new Error(`setting: HTTP ${r.status}`);
+}
+
 export async function bulkAction(ids: number[], action: string): Promise<number> {
   const r = await req("/api/articles/bulk", {
     method: "POST",

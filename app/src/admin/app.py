@@ -15,6 +15,7 @@ from src.db.models import ArticleRecord, ArticleStatus, RunLog
 from src.feeds import service as feeds_service
 from src.log import setup_logging
 from src.publisher.queue import parse_when, schedule_article, unschedule
+from src.settings_store import EDITABLE, apply_overrides, current_values, set_override
 
 setup_logging()
 
@@ -28,9 +29,15 @@ def require_auth(authorization: str | None = Header(default=None)) -> None:
         raise HTTPException(status_code=401, detail="unauthorized")
 
 
+def apply_runtime_settings() -> None:
+    """Накатывает рантайм-настройки из БД на каждый запрос админки."""
+    with get_session() as session:
+        apply_overrides(session)
+
+
 app = FastAPI(
     title="article-pipeline admin API",
-    dependencies=[Depends(require_auth)],
+    dependencies=[Depends(require_auth), Depends(apply_runtime_settings)],
 )
 app.add_middleware(
     CORSMiddleware,
@@ -374,6 +381,23 @@ def delete_feed_api(feed_id: int) -> dict[str, bool]:
     with get_session() as session:
         ok = feeds_service.remove_feed(session, feed_id)
     return {"ok": ok}
+
+
+class SettingIn(BaseModel):
+    key: str
+    value: str
+
+
+@app.get("/api/settings")
+def get_settings_api() -> dict[str, object]:
+    with get_session() as session:
+        return {"settings": current_values(session), "types": EDITABLE}
+
+
+@app.post("/api/settings")
+def set_setting_api(body: SettingIn) -> dict[str, bool]:
+    with get_session() as session:
+        return {"ok": set_override(session, body.key, body.value)}
 
 
 @app.get("/api/last-run")

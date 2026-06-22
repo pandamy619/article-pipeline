@@ -164,9 +164,11 @@ async def _scheduled_run(bot: Bot) -> None:
     """Гоняет пайплайн в отдельном потоке и шлёт новые черновики на модерацию."""
 
     def _process() -> PipelineResult:
-        client = OllamaClient()
+        from src.settings_store import apply_overrides
+
         with get_session() as session:
-            return run_pipeline(session, client)
+            apply_overrides(session)
+            return run_pipeline(session, OllamaClient())
 
     try:
         result = await asyncio.to_thread(_process)

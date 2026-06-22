@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from "react";
+import { type CSSProperties, Fragment, useEffect, useState } from "react";
 import {
   addFeed,
   AuthError,
@@ -11,9 +11,11 @@ import {
   deleteFeed,
   fetchArticles,
   fetchFeeds,
-  getToken,
   fetchLastRun,
+  fetchSettings,
   fetchStats,
+  getToken,
+  saveSetting,
   runAction,
   savePost,
   scheduleArticle,
@@ -52,6 +54,7 @@ export default function App() {
   const [openId, setOpenId] = useState<number | null>(null);
   const [mode, setMode] = useState<Mode>("preview");
   const [showFeeds, setShowFeeds] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [needLogin, setNeedLogin] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
 
@@ -147,6 +150,9 @@ export default function App() {
           <button className="btn" onClick={() => setShowFeeds((v) => !v)}>
             Ленты
           </button>
+          <button className="btn" onClick={() => setShowSettings((v) => !v)}>
+            Настройки
+          </button>
           <button
             className="btn btn-primary"
             disabled={busy}
@@ -170,6 +176,8 @@ export default function App() {
       </header>
 
       {showFeeds && <FeedsPanel />}
+
+      {showSettings && <SettingsPanel />}
 
       {lastRun?.exists && <LastRunLine run={lastRun} />}
 
@@ -734,6 +742,125 @@ function LastRunLine({ run }: { run: LastRun }) {
     <div className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
       последний прогон: собрано {run.collected}, добавлено {run.added}, дублей {dups},
       в фильтр {run.filtered}, черновиков {run.drafted} · {when}
+    </div>
+  );
+}
+
+const SETTING_LABELS: Record<string, string> = {
+  llm_model: "Модель LLM",
+  embed_model: "Модель эмбеддингов",
+  channel_topic: "Тематика канала (для фильтра)",
+  relevance_threshold: "Порог релевантности (0–10)",
+  run_interval_minutes: "Интервал прогона (мин) ⟳",
+  publish_interval_minutes: "Интервал публикации (мин) ⟳",
+  max_articles_per_run: "Лимит статей за прогон (0 = без)",
+  semantic_dedup_enabled: "Семантический дедуп",
+  semantic_dedup_threshold: "Порог дедупа (0–1)",
+  habr_enabled: "Habr включён",
+  habr_hubs: "Habr: хабы через запятую",
+  arxiv_categories: "arXiv: категории",
+  reddit_subreddits: "Reddit: сабреддиты",
+  searxng_queries: "Веб-поиск: запросы",
+};
+
+function SettingsPanel() {
+  const [types, setTypes] = useState<Record<string, string>>({});
+  const [form, setForm] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  async function load() {
+    const d = await fetchSettings();
+    setTypes(d.types);
+    const f: Record<string, string> = {};
+    for (const k of Object.keys(d.types)) {
+      const v = d.settings[k];
+      f[k] = typeof v === "boolean" ? (v ? "true" : "false") : String(v ?? "");
+    }
+    setForm(f);
+  }
+  useEffect(() => {
+    load();
+  }, []);
+
+  async function save() {
+    setBusy(true);
+    setSaved(false);
+    try {
+      for (const k of Object.keys(types)) await saveSetting(k, form[k] ?? "");
+      setSaved(true);
+      await load();
+    } catch (e) {
+      alert(`Ошибка: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const inp: CSSProperties = {
+    border: "1px solid var(--line-strong)",
+    borderRadius: 8,
+    padding: "7px 9px",
+    fontSize: 13,
+    fontFamily: "inherit",
+  };
+
+  return (
+    <div className="card" style={{ padding: "14px 16px", marginBottom: 16 }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+          gap: "10px 16px",
+        }}
+      >
+        {Object.keys(types).map((k) => (
+          <label
+            key={k}
+            style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}
+          >
+            <span className="muted">{SETTING_LABELS[k] ?? k}</span>
+            {types[k] === "bool" ? (
+              <select
+                value={form[k] ?? "false"}
+                onChange={(e) => setForm({ ...form, [k]: e.target.value })}
+                style={inp}
+              >
+                <option value="true">вкл</option>
+                <option value="false">выкл</option>
+              </select>
+            ) : k === "channel_topic" ? (
+              <textarea
+                value={form[k] ?? ""}
+                onChange={(e) => setForm({ ...form, [k]: e.target.value })}
+                style={{ ...inp, minHeight: 60, resize: "vertical" }}
+              />
+            ) : (
+              <input
+                type={types[k] === "int" || types[k] === "float" ? "number" : "text"}
+                step={types[k] === "float" ? "0.01" : "1"}
+                value={form[k] ?? ""}
+                onChange={(e) => setForm({ ...form, [k]: e.target.value })}
+                style={inp}
+              />
+            )}
+          </label>
+        ))}
+      </div>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 12 }}>
+        <button className="btn btn-primary" disabled={busy} onClick={save}>
+          Сохранить
+        </button>
+        {saved && (
+          <span className="muted" style={{ fontSize: 12 }}>
+            сохранено
+          </span>
+        )}
+      </div>
+      <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+        Применяется со следующего прогона. Пункты с ⟳ (интервалы) — после
+        перезапуска бота.
+      </div>
     </div>
   );
 }

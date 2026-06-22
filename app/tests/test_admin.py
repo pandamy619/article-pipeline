@@ -204,6 +204,21 @@ def test_auth_required_when_token_set(client, monkeypatch):
     )
 
 
+def test_settings_api_get_and_set(client, monkeypatch):
+    import src.config
+
+    monkeypatch.setattr(src.config.settings, "relevance_threshold", 7)
+    data = client.get("/api/settings").json()
+    assert "relevance_threshold" in data["settings"]
+    assert "types" in data
+    assert client.post(
+        "/api/settings", json={"key": "relevance_threshold", "value": "9"}
+    ).json() == {"ok": True}
+    assert client.post("/api/settings", json={"key": "nope", "value": "x"}).json() == {
+        "ok": False
+    }
+
+
 def test_last_run_empty(client):
     assert client.get("/api/last-run").json() == {"exists": False}
 
