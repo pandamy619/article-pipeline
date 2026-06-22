@@ -1,7 +1,12 @@
 from src.collectors.websearch import collect_websearch
 
 SAMPLE = [
-    {"url": "https://a.com/1", "title": "Туториал по Python", "content": "сниппет"},
+    {
+        "url": "https://a.com/1",
+        "title": "Туториал по Python",
+        "content": "сниппет",
+        "img_src": "https://a.com/1.jpg",
+    },
     {"url": "https://a.com/2", "title": "Основы Git", "content": "сниппет2"},
 ]
 
@@ -16,6 +21,8 @@ def test_collect_websearch_parses():
     assert arts[0].title == "Туториал по Python"
     assert arts[0].source == "Веб-поиск"
     assert arts[0].text == "сниппет"
+    assert arts[0].image_url == "https://a.com/1.jpg"
+    assert arts[1].image_url is None
 
 
 def test_collect_websearch_dedupes_across_queries():

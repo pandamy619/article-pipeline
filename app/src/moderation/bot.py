@@ -80,11 +80,14 @@ async def on_action(query: CallbackQuery, bot: Bot, state: FSMContext) -> None:
     elif action == "approve":
         with get_session() as session:
             post = service.get_post_text(session, article_id)
+            image = service.get_image(session, article_id)
         if not post:
             await query.answer("Пост пуст")
             return
         try:
-            message_id = await publish(bot, settings.telegram_channel_id, post)
+            message_id = await publish(
+                bot, settings.telegram_channel_id, post, image_url=image
+            )
         except Exception:
             await query.answer("Ошибка публикации")
             return

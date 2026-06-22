@@ -8,6 +8,7 @@ export interface Article {
   source: string;
   has_post: boolean;
   post_text: string | null;
+  image_url: string | null;
 }
 
 export type Stats = Record<string, number>;

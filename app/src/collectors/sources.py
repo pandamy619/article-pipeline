@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-import sys
+import logging
 from collections.abc import Callable, Iterable
 
 from src.collectors.arxiv import collect_arxiv
@@ -15,6 +15,8 @@ from src.collectors.reddit import collect_reddit
 from src.collectors.rss import collect_rss
 from src.collectors.websearch import collect_websearch
 from src.config import settings
+
+log = logging.getLogger(__name__)
 
 
 def _interleave(buckets: list[list[Article]]) -> list[Article]:
@@ -46,9 +48,9 @@ def collect_all(feeds: Iterable[str] | None = None) -> list[Article]:
         try:
             got = fn()
             buckets.append(got)
-            print(f"[collect] {name}: {len(got)}", file=sys.stderr)
+            log.info("collect %s: %d", name, len(got))
         except Exception as exc:  # noqa: BLE001 — один источник не должен ронять прогон
-            print(f"[collect] {name} FAILED: {exc}", file=sys.stderr)
+            log.warning("collect %s failed: %s", name, exc)
 
     if rss_feeds:
         _safe("rss", lambda: collect_rss(rss_feeds, limit_per_feed=limit))

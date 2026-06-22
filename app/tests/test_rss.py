@@ -45,3 +45,21 @@ def test_collect_rss_falls_back_to_summary():
 def test_limit_per_feed():
     articles = collect_rss([SAMPLE_RSS], text_fetcher=lambda url: "x", limit_per_feed=1)
     assert len(articles) == 1
+
+
+SAMPLE_RSS_IMG = """<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Feed</title>
+    <item>
+      <title>С картинкой</title>
+      <link>https://example.com/img</link>
+      <enclosure url="https://img.example.com/a.jpg" type="image/jpeg" length="10"/>
+    </item>
+  </channel>
+</rss>"""
+
+
+def test_collect_rss_extracts_image():
+    arts = collect_rss([SAMPLE_RSS_IMG], text_fetcher=lambda url: "x")
+    assert arts[0].image_url == "https://img.example.com/a.jpg"

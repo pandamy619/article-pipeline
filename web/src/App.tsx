@@ -203,7 +203,11 @@ export default function App() {
                   <tr>
                     <td colSpan={6} className="panel-cell">
                       {mode === "preview" ? (
-                        <PreviewPanel text={a.post_text} onEdit={() => setMode("edit")} />
+                        <PreviewPanel
+                          text={a.post_text}
+                          image={a.image_url}
+                          onEdit={() => setMode("edit")}
+                        />
                       ) : (
                         <EditPanel
                           article={a}
@@ -230,7 +234,15 @@ export default function App() {
   );
 }
 
-function PreviewPanel({ text, onEdit }: { text: string; onEdit: () => void }) {
+function PreviewPanel({
+  text,
+  image,
+  onEdit,
+}: {
+  text: string;
+  image: string | null;
+  onEdit: () => void;
+}) {
   return (
     <div className="panel">
       <div className="col">
@@ -239,7 +251,7 @@ function PreviewPanel({ text, onEdit }: { text: string; onEdit: () => void }) {
             ✏️ Редактировать
           </button>
         </div>
-        <TelegramView text={text} />
+        <TelegramView text={text} image={image} />
       </div>
     </div>
   );
@@ -370,10 +382,13 @@ function linkify(text: string) {
   });
 }
 
-function TelegramView({ text }: { text: string }) {
+function TelegramView({ text, image }: { text: string; image?: string | null }) {
   return (
     <div className="tg-wrap">
-      <div className="tg-bubble">{linkify(text)}</div>
+      <div className="tg-bubble">
+        {image && <img className="tg-photo" src={image} alt="" />}
+        {linkify(text)}
+      </div>
     </div>
   );
 }

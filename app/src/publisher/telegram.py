@@ -1,14 +1,16 @@
-"""Публикация поста в Telegram-канал."""
+"""Публикация поста в Telegram-канал (с картинкой, если есть)."""
 
 from __future__ import annotations
 
 from typing import Protocol
 
 TELEGRAM_LIMIT = 4096
+CAPTION_LIMIT = 1024  # лимит подписи под фото в Telegram
 
 
 class Sender(Protocol):
     async def send_message(self, chat_id: int | str, text: str): ...
+    async def send_photo(self, chat_id: int | str, photo: str, caption: str): ...
 
 
 def resolve_chat_id(value: int | str) -> int | str:
@@ -42,9 +44,21 @@ def split_text(text: str, limit: int = TELEGRAM_LIMIT) -> list[str]:
     return chunks
 
 
-async def publish(bot: Sender, chat_id: int | str, text: str) -> int | None:
-    """Шлёт пост в канал, разбивая длинный на части. Возвращает message_id первой части."""
+async def publish(
+    bot: Sender, chat_id: int | str, text: str, image_url: str | None = None
+) -> int | None:
+    """Шлёт пост в канал. Если есть картинка и пост влезает в подпись — фото с
+    подписью; иначе текстом (длинный — частями). Возвращает message_id первой части.
+    """
     target = resolve_chat_id(chat_id)
+
+    if image_url and len(text) <= CAPTION_LIMIT:
+        try:
+            msg = await bot.send_photo(target, image_url, caption=text)
+            return getattr(msg, "message_id", None)
+        except Exception:  # noqa: BLE001 — картинка не зашла, шлём текстом
+            pass
+
     first_id: int | None = None
     for part in split_text(text):
         msg = await bot.send_message(target, part)

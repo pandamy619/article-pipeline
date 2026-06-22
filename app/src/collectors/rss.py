@@ -29,6 +29,20 @@ def _parsed_datetime(entry) -> datetime | None:
     return None
 
 
+def _entry_image(entry) -> str | None:
+    """Картинка из RSS-записи: media:thumbnail/content или enclosure-image."""
+    for key in ("media_thumbnail", "media_content"):
+        media = entry.get(key)
+        if media:
+            url = media[0].get("url")
+            if url:
+                return url
+    for link in entry.get("links", []):
+        if link.get("rel") == "enclosure" and link.get("type", "").startswith("image"):
+            return link.get("href")
+    return None
+
+
 def collect_rss(
     feeds: Iterable[str],
     *,
@@ -57,6 +71,7 @@ def collect_rss(
                     text=(text or "").strip(),
                     source=source,
                     published_at=_parsed_datetime(entry),
+                    image_url=_entry_image(entry),
                 )
             )
     return articles

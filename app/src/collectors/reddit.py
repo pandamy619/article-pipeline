@@ -49,6 +49,8 @@ def collect_reddit(
                 datetime.fromtimestamp(created, tz=timezone.utc) if created else None
             )
             text = (d.get("selftext") or "").strip()
+            thumb = d.get("thumbnail") or ""
+            image = thumb if thumb.startswith("http") else None
             articles.append(
                 Article(
                     title=title,
@@ -56,6 +58,7 @@ def collect_reddit(
                     text=text or title,
                     source=f"Reddit r/{sub}",
                     published_at=published,
+                    image_url=image,
                 )
             )
     return articles

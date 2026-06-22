@@ -57,6 +57,7 @@ def save_articles(session: Session, articles: Iterable[Article]) -> SaveResult:
                 text=art.text,
                 source=art.source,
                 published_at=art.published_at,
+                image_url=art.image_url,
                 status=ArticleStatus.new,
             )
         )

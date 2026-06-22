@@ -41,6 +41,11 @@ def get_post_text(session: Session, article_id: int) -> str | None:
     return rec.post_text if rec else None
 
 
+def get_image(session: Session, article_id: int) -> str | None:
+    rec = session.get(ArticleRecord, article_id)
+    return rec.image_url if rec else None
+
+
 def mark_pending(session: Session, article_id: int) -> None:
     rec = session.get(ArticleRecord, article_id)
     if rec and rec.status == ArticleStatus.drafted:

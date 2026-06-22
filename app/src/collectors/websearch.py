@@ -65,6 +65,7 @@ def collect_websearch(
                     text=(text or "").strip(),
                     source="Веб-поиск",
                     published_at=None,
+                    image_url=(r.get("img_src") or None),
                 )
             )
     return articles

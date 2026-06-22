@@ -11,6 +11,7 @@ SAMPLE = {
                     "permalink": "/r/learnprogramming/comments/x/learn_python/",
                     "selftext": "Tips here",
                     "created_utc": 1735819200,
+                    "thumbnail": "https://i.redd.it/t.jpg",
                 }
             },
             {
@@ -44,5 +45,7 @@ def test_collect_reddit_parses():
     assert first.text == "Tips here"
     assert first.source == "Reddit r/learnprogramming"
     assert isinstance(first.published_at, datetime)
-    # пост-ссылка без selftext: текст падает на заголовок
+    assert first.image_url == "https://i.redd.it/t.jpg"
+    # пост-ссылка без selftext: текст падает на заголовок, картинки нет
     assert arts[1].text == "Cool link"
+    assert arts[1].image_url is None

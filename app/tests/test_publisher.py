@@ -51,3 +51,48 @@ def test_publish_splits_long():
     asyncio.run(publish(bot, "-100123", "x " * 4000))
     assert len(bot.sent) >= 2
     assert all(chat == -100123 for chat, _ in bot.sent)
+
+
+class PhotoBot:
+    def __init__(self, photo_raises=False):
+        self.photos = []
+        self.msgs = []
+        self.photo_raises = photo_raises
+
+    async def send_photo(self, chat_id, photo, caption):
+        if self.photo_raises:
+            raise RuntimeError("bad image")
+        self.photos.append((chat_id, photo, caption))
+
+        class M:
+            message_id = 7
+
+        return M()
+
+    async def send_message(self, chat_id, text):
+        self.msgs.append((chat_id, text))
+
+        class M:
+            message_id = 99
+
+        return M()
+
+
+def test_publish_with_image_uses_photo():
+    bot = PhotoBot()
+    mid = asyncio.run(publish(bot, "@c", "короткий пост", image_url="https://i/x.jpg"))
+    assert mid == 7
+    assert bot.photos and not bot.msgs
+
+
+def test_publish_long_with_image_falls_back_to_text():
+    bot = PhotoBot()
+    # caption > 1024 -> фото нельзя, шлём текстом
+    asyncio.run(publish(bot, "@c", "x " * 1000, image_url="https://i/x.jpg"))
+    assert bot.msgs and not bot.photos
+
+
+def test_publish_photo_error_falls_back_to_text():
+    bot = PhotoBot(photo_raises=True)
+    asyncio.run(publish(bot, "@c", "короткий", image_url="https://i/x.jpg"))
+    assert bot.msgs and not bot.photos

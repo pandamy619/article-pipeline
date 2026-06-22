@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     env: str = "dev"
+    log_level: str = "INFO"
 
     # LLM
     ollama_host: str = "http://localhost:11434"

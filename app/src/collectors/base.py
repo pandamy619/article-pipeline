@@ -13,3 +13,4 @@ class Article:
     text: str
     source: str
     published_at: datetime | None = None
+    image_url: str | None = None

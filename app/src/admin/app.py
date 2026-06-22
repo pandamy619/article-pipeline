@@ -12,6 +12,9 @@ from sqlalchemy import func, select
 from src.config import settings
 from src.db.base import get_session
 from src.db.models import ArticleRecord, ArticleStatus
+from src.log import setup_logging
+
+setup_logging()
 
 app = FastAPI(title="article-pipeline admin API")
 app.add_middleware(
@@ -32,6 +35,7 @@ class ArticleOut(BaseModel):
     source: str
     has_post: bool
     post_text: str | None
+    image_url: str | None
 
 
 def _to_out(rec: ArticleRecord) -> ArticleOut:
@@ -45,6 +49,7 @@ def _to_out(rec: ArticleRecord) -> ArticleOut:
         source=rec.source,
         has_post=bool(rec.post_text),
         post_text=rec.post_text,
+        image_url=rec.image_url,
     )
 
 
@@ -127,12 +132,15 @@ async def publish_article(article_id: int) -> dict[str, bool]:
     with get_session() as session:
         rec = session.get(ArticleRecord, article_id)
         post = rec.post_text if rec else None
+        image = rec.image_url if rec else None
     if not post:
         return {"ok": False}
 
     bot = Bot(settings.telegram_bot_token)
     try:
-        message_id = await publish(bot, settings.telegram_channel_id, post)
+        message_id = await publish(
+            bot, settings.telegram_channel_id, post, image_url=image
+        )
     finally:
         await bot.session.close()
 
