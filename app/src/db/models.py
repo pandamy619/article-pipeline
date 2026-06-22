@@ -18,6 +18,7 @@ class ArticleStatus(str, enum.Enum):
     filtered = "filtered"  # прошла порог релевантности
     drafted = "drafted"  # сгенерирован пост
     pending = "pending"  # ждёт модерации
+    scheduled = "scheduled"  # в очереди на публикацию по времени
     published = "published"
     rejected = "rejected"
 
@@ -46,6 +47,9 @@ class ArticleRecord(Base):
     relevance_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
     relevance_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     post_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    scheduled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     embedding: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON-вектор
     image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     tg_message_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)

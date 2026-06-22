@@ -186,6 +186,30 @@ async def _scheduled_run(bot: Bot) -> None:
         await bot.send_message(_admin_id(), f"Новых черновиков на модерацию: {sent}")
 
 
+async def _publish_due(bot: Bot) -> None:
+    """Публикует статьи из очереди, у которых подошло время."""
+    from src.publisher.queue import due_article_ids
+
+    with get_session() as session:
+        ids = due_article_ids(session)
+    for aid in ids:
+        with get_session() as session:
+            post = service.get_post_text(session, aid)
+            image = service.get_image(session, aid)
+        if not post:
+            continue
+        try:
+            mid = await publish(
+                bot, settings.telegram_channel_id, post, image_url=image
+            )
+        except Exception:  # noqa: BLE001 — одна статья не должна ронять остальные
+            log.exception("scheduled publish failed for article %s", aid)
+            continue
+        with get_session() as session:
+            service.mark_published(session, aid, mid)
+        log.info("published scheduled article %s", aid)
+
+
 def build_dispatcher() -> Dispatcher:
     dp = Dispatcher()
     dp.include_router(router)
@@ -201,6 +225,7 @@ async def run() -> None:
         minutes=settings.run_interval_minutes,
         args=[bot],
     )
+    scheduler.add_job(_publish_due, "interval", minutes=1, args=[bot])
     scheduler.start()
     await build_dispatcher().start_polling(bot)
 

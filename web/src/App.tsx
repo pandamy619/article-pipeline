@@ -11,20 +11,31 @@ import {
   fetchStats,
   runAction,
   savePost,
+  scheduleArticle,
   setArticleStatus,
+  unscheduleArticle,
 } from "./api";
 import type { Article, Feed, LastRun, Stats } from "./types";
 
-const STATUSES = ["new", "filtered", "drafted", "pending", "published", "rejected"];
+const STATUSES = [
+  "new",
+  "filtered",
+  "drafted",
+  "pending",
+  "scheduled",
+  "published",
+  "rejected",
+];
 const STATUS_RU: Record<string, string> = {
   new: "новая",
   filtered: "прошла фильтр",
   drafted: "черновик",
   pending: "на модерации",
+  scheduled: "в очереди",
   published: "опубликована",
   rejected: "отклонена",
 };
-type Mode = "preview" | "edit";
+type Mode = "preview" | "edit" | "schedule";
 
 export default function App() {
   const [articles, setArticles] = useState<Article[]>([]);
@@ -164,6 +175,11 @@ export default function App() {
                       {a.title}
                     </a>
                     {a.relevance_reason && <div className="reason">{a.relevance_reason}</div>}
+                    {a.status === "scheduled" && a.scheduled_at && (
+                      <div className="reason">
+                        🕒 в очереди на {new Date(a.scheduled_at).toLocaleString()}
+                      </div>
+                    )}
                   </td>
                   <td className="muted">{a.source}</td>
                   <td>
@@ -202,6 +218,17 @@ export default function App() {
                               🚀
                             </button>
                           )}
+                          {a.status !== "published" && (
+                            <button
+                              className={`icon${
+                                openId === a.id && mode === "schedule" ? " on" : ""
+                              }`}
+                              title="запланировать публикацию"
+                              onClick={() => toggle(a.id, "schedule")}
+                            >
+                              ⏰
+                            </button>
+                          )}
                         </>
                       ) : (
                         <button
@@ -225,11 +252,16 @@ export default function App() {
                           image={a.image_url}
                           onEdit={() => setMode("edit")}
                         />
-                      ) : (
+                      ) : mode === "edit" ? (
                         <EditPanel
                           article={a}
                           onChanged={() => refresh(filter)}
                           onPreview={() => setMode("preview")}
+                        />
+                      ) : (
+                        <SchedulePanel
+                          article={a}
+                          onChanged={() => refresh(filter)}
                         />
                       )}
                     </td>
@@ -397,6 +429,103 @@ function linkify(text: string) {
     }
     return <span key={i}>{part}</span>;
   });
+}
+
+function toLocalInput(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
+    d.getHours(),
+  )}:${pad(d.getMinutes())}`;
+}
+
+function SchedulePanel({
+  article,
+  onChanged,
+}: {
+  article: Article;
+  onChanged: () => Promise<void>;
+}) {
+  const [when, setWhen] = useState(toLocalInput(article.scheduled_at));
+  const [busy, setBusy] = useState(false);
+
+  async function wrap(fn: () => Promise<void>) {
+    setBusy(true);
+    try {
+      await fn();
+      await onChanged();
+    } catch (e) {
+      alert(`Ошибка: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="panel">
+      <div className="col" style={{ maxWidth: 460 }}>
+        <div className="muted" style={{ fontSize: 13, marginBottom: 10 }}>
+          {article.status === "scheduled" && article.scheduled_at
+            ? `В очереди на ${new Date(article.scheduled_at).toLocaleString()}`
+            : "Не в очереди"}
+        </div>
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            alignItems: "center",
+            flexWrap: "wrap",
+            marginBottom: 10,
+          }}
+        >
+          <input
+            type="datetime-local"
+            value={when}
+            onChange={(e) => setWhen(e.target.value)}
+            style={{
+              border: "1px solid var(--line-strong)",
+              borderRadius: 9,
+              padding: "7px 10px",
+              fontSize: 13,
+              fontFamily: "inherit",
+            }}
+          />
+          <button
+            className="btn"
+            disabled={busy || !when}
+            onClick={() =>
+              wrap(() => scheduleArticle(article.id, new Date(when).toISOString()))
+            }
+          >
+            Запланировать на это время
+          </button>
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button
+            className="btn btn-primary"
+            disabled={busy}
+            onClick={() => wrap(() => scheduleArticle(article.id, null))}
+          >
+            В очередь (авто, +интервал)
+          </button>
+          {article.status === "scheduled" && (
+            <button
+              className="btn"
+              disabled={busy}
+              onClick={() => wrap(() => unscheduleArticle(article.id))}
+            >
+              Убрать из очереди
+            </button>
+          )}
+        </div>
+        <div className="muted" style={{ fontSize: 12, marginTop: 10 }}>
+          «Авто» ставит в конец очереди с шагом PUBLISH_INTERVAL_MINUTES. Публикует
+          фоновый планировщик по времени.
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function LastRunLine({ run }: { run: LastRun }) {

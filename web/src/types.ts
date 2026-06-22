@@ -9,6 +9,7 @@ export interface Article {
   has_post: boolean;
   post_text: string | null;
   image_url: string | null;
+  scheduled_at: string | null;
 }
 
 export interface Feed {

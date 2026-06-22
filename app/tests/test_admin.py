@@ -126,6 +126,34 @@ def test_feeds_api_add_list_delete(client):
     assert not any(f["url"] == "https://x.com/feed" for f in feeds2)
 
 
+def test_schedule_and_unschedule(client):
+    s = db_base.SessionLocal()
+    s.get(ArticleRecord, 1).post_text = "пост"
+    s.commit()
+    s.close()
+
+    r = client.post("/api/articles/1/schedule", json={}).json()
+    assert r["ok"] is True
+    assert r["scheduled_at"]
+    s = db_base.SessionLocal()
+    assert s.get(ArticleRecord, 1).status == ArticleStatus.scheduled
+    s.close()
+
+    assert client.post("/api/articles/1/unschedule").json() == {"ok": True}
+
+
+def test_schedule_explicit_time(client):
+    s = db_base.SessionLocal()
+    s.get(ArticleRecord, 1).post_text = "пост"
+    s.commit()
+    s.close()
+    r = client.post(
+        "/api/articles/1/schedule", json={"when": "2030-01-01T10:00:00Z"}
+    ).json()
+    assert r["ok"] is True
+    assert "2030-01-01" in r["scheduled_at"]
+
+
 def test_last_run_empty(client):
     assert client.get("/api/last-run").json() == {"exists": False}
 

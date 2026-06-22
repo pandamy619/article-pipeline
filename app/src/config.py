@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     # Поведение
     relevance_threshold: int = 7
     run_interval_minutes: int = 60
+    publish_interval_minutes: int = 120  # шаг между авто-запланированными постами
     max_articles_per_run: int = 0  # 0 = без лимита
     channel_topic: str = (
         "статьи для начинающих программистов: туториалы, основы, "

@@ -25,6 +25,27 @@ export async function runAction(id: number, what: ArticleAction): Promise<void> 
   }
 }
 
+export async function scheduleArticle(
+  id: number,
+  when: string | null,
+): Promise<void> {
+  const r = await fetch(`/api/articles/${id}/schedule`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ when }),
+  });
+  if (!r.ok) throw new Error(`schedule: HTTP ${r.status}`);
+  const data = await r.json().catch(() => ({}));
+  if (data && data.ok === false) {
+    throw new Error("не удалось запланировать (нет поста?)");
+  }
+}
+
+export async function unscheduleArticle(id: number): Promise<void> {
+  const r = await fetch(`/api/articles/${id}/unschedule`, { method: "POST" });
+  if (!r.ok) throw new Error(`unschedule: HTTP ${r.status}`);
+}
+
 export async function setArticleStatus(id: number, status: string): Promise<void> {
   const r = await fetch(`/api/articles/${id}/status`, {
     method: "POST",

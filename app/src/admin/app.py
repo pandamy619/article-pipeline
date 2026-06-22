@@ -14,6 +14,7 @@ from src.db.base import get_session
 from src.db.models import ArticleRecord, ArticleStatus, RunLog
 from src.feeds import service as feeds_service
 from src.log import setup_logging
+from src.publisher.queue import parse_when, schedule_article, unschedule
 
 setup_logging()
 
@@ -37,6 +38,7 @@ class ArticleOut(BaseModel):
     has_post: bool
     post_text: str | None
     image_url: str | None
+    scheduled_at: str | None
 
 
 def _to_out(rec: ArticleRecord) -> ArticleOut:
@@ -51,6 +53,7 @@ def _to_out(rec: ArticleRecord) -> ArticleOut:
         has_post=bool(rec.post_text),
         post_text=rec.post_text,
         image_url=rec.image_url,
+        scheduled_at=rec.scheduled_at.isoformat() if rec.scheduled_at else None,
     )
 
 
@@ -103,6 +106,26 @@ def set_status(article_id: int, body: StatusIn) -> dict[str, bool]:
             return {"ok": False}  # опубликованную статью менять нельзя
         rec.status = new_status
     return {"ok": True}
+
+
+class ScheduleIn(BaseModel):
+    when: str | None = None
+
+
+@app.post("/api/articles/{article_id}/schedule")
+def schedule_article_api(article_id: int, body: ScheduleIn) -> dict[str, object]:
+    with get_session() as session:
+        when = schedule_article(session, article_id, parse_when(body.when))
+        return {
+            "ok": when is not None,
+            "scheduled_at": when.isoformat() if when else None,
+        }
+
+
+@app.post("/api/articles/{article_id}/unschedule")
+def unschedule_article_api(article_id: int) -> dict[str, bool]:
+    with get_session() as session:
+        return {"ok": unschedule(session, article_id)}
 
 
 @app.post("/api/articles/{article_id}/draft")

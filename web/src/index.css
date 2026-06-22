@@ -212,6 +212,10 @@ table.tbl {
   background-color: #ffe8d2;
   color: #a64a12;
 }
+.st-scheduled {
+  background-color: #e7e3fb;
+  color: #5a45c7;
+}
 .st-published {
   background-color: #d8f5e1;
   color: #15813f;
