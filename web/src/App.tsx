@@ -50,6 +50,23 @@ const STATUS_RU: Record<string, string> = {
   rejected: "отклонена",
 };
 type Mode = "preview" | "edit" | "schedule";
+type View = "articles" | "queue" | "search" | "channels" | "feeds" | "settings";
+const NAV: { key: View; label: string }[] = [
+  { key: "articles", label: "Статьи" },
+  { key: "queue", label: "Очередь" },
+  { key: "search", label: "Поиск" },
+  { key: "channels", label: "Каналы" },
+  { key: "feeds", label: "Ленты" },
+  { key: "settings", label: "Настройки" },
+];
+const VIEW_TITLES: Record<View, string> = {
+  articles: "Статьи",
+  queue: "Очередь",
+  search: "Поиск",
+  channels: "Каналы",
+  feeds: "Ленты",
+  settings: "Настройки",
+};
 
 export default function App() {
   const [articles, setArticles] = useState<Article[]>([]);
@@ -59,10 +76,7 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [openId, setOpenId] = useState<number | null>(null);
   const [mode, setMode] = useState<Mode>("preview");
-  const [showFeeds, setShowFeeds] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
-  const [showChannels, setShowChannels] = useState(false);
-  const [showSearch, setShowSearch] = useState(false);
+  const [view, setView] = useState<View>("articles");
   const [needLogin, setNeedLogin] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [channels, setChannels] = useState<Channel[]>([]);
@@ -160,17 +174,26 @@ export default function App() {
       : articles;
 
   return (
-    <div className="app">
+    <div className="shell">
       {busy && <div className="working-badge">работаю…</div>}
 
-      <header className="topbar">
-        <div>
-          <h1>article-pipeline</h1>
-          <p className="sub">панель модерации статей</p>
-        </div>
-        <div
-          style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}
-        >
+      <aside className="sidebar">
+        <div className="brand">article-pipeline</div>
+        {NAV.map((n) => (
+          <button
+            key={n.key}
+            className={`nav-item${view === n.key ? " active" : ""}`}
+            onClick={() => {
+              setView(n.key);
+              if (n.key === "queue") setFilter("scheduled");
+              if (n.key === "articles") setFilter("");
+            }}
+          >
+            {n.label}
+          </button>
+        ))}
+        <div className="sidebar-spacer" />
+        <div className="sidebar-foot">
           <select
             value={currentChannel ?? ""}
             onChange={(e) =>
@@ -194,29 +217,9 @@ export default function App() {
               </option>
             ))}
           </select>
-          <button className="btn" onClick={() => setShowChannels((v) => !v)}>
-            Каналы
-          </button>
-          <button className="btn" onClick={() => setShowSearch((v) => !v)}>
-            Поиск
-          </button>
-          <button className="btn" onClick={() => setShowFeeds((v) => !v)}>
-            Ленты
-          </button>
-          <button className="btn" onClick={() => setShowSettings((v) => !v)}>
-            Настройки
-          </button>
-          <button
-            className="btn btn-primary"
-            disabled={busy}
-            onClick={() => run(() => collect())}
-          >
-            {busy ? "…" : "Собрать сейчас"}
-          </button>
           {getToken() && (
             <button
               className="btn"
-              title="выйти"
               onClick={() => {
                 clearToken();
                 setNeedLogin(true);
@@ -226,13 +229,23 @@ export default function App() {
             </button>
           )}
         </div>
-      </header>
+      </aside>
 
-      {showFeeds && <FeedsPanel />}
+      <main className="main">
+        <header className="main-head">
+          <h1>{VIEW_TITLES[view]}</h1>
+          <button
+            className="btn btn-primary"
+            disabled={busy}
+            onClick={() => run(() => collect())}
+          >
+            {busy ? "…" : "Собрать сейчас"}
+          </button>
+        </header>
 
-      {showSettings && <SettingsPanel />}
-
-      {showChannels && (
+      {view === "feeds" && <FeedsPanel />}
+      {view === "settings" && <SettingsPanel />}
+      {view === "channels" && (
         <ChannelsPanel
           channels={channels}
           onChanged={async () => {
@@ -241,17 +254,31 @@ export default function App() {
           }}
         />
       )}
-
-      {showSearch && (
+      {view === "search" && (
         <SearchPanel
           channel={currentChannel}
           onChanged={() => refresh(filter, currentChannel)}
         />
       )}
 
-      {lastRun?.exists && <LastRunLine run={lastRun} />}
+      {(view === "articles" || view === "queue") && (
+        <>
+          {lastRun?.exists && <LastRunLine run={lastRun} />}
 
-      {selected.size > 0 && (
+          <div className="metrics">
+            <div className="metric">
+              <div className="v">{stats.total ?? 0}</div>
+              <div className="k">всего</div>
+            </div>
+            {(["new", "drafted", "scheduled", "published"] as const).map((k) => (
+              <div className="metric" key={k}>
+                <div className="v">{stats[k] ?? 0}</div>
+                <div className="k">{STATUS_RU[k]}</div>
+              </div>
+            ))}
+          </div>
+
+          {selected.size > 0 && (
         <div
           className="card"
           style={{
@@ -484,6 +511,9 @@ export default function App() {
           </tbody>
         </table>
       </div>
+        </>
+      )}
+      </main>
     </div>
   );
 }
