@@ -129,6 +129,11 @@ class Channel(Base):
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     relevance_threshold: Mapped[int] = mapped_column(Integer, default=7)
     publish_interval_minutes: Mapped[int] = mapped_column(Integer, default=120)
+    collect_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    collect_interval_minutes: Mapped[int] = mapped_column(Integer, default=60)
+    next_collect_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )  # подсказка для UI: когда планировщик бота запустит сбор в следующий раз
     rss_feeds: Mapped[str] = mapped_column(Text, default="")
     habr_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     habr_hubs: Mapped[str] = mapped_column(Text, default="")

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime, timedelta, timezone
 
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.filters import Command, CommandObject
@@ -21,7 +22,7 @@ from src.feeds import service as feeds_service
 from src.llm.client import OllamaClient
 from src.moderation import service
 from src.moderation.keyboards import review_keyboard
-from src.pipeline import PipelineResult, run_all_channels
+from src.pipeline import PipelineResult, run_pipeline
 from src.publisher.telegram import publish
 
 router = Router()
@@ -58,34 +59,41 @@ async def _notify_admin(text: str) -> None:
         await bot.session.close()
 
 
+async def _send_drafts_for(channel_id: int) -> int:
+    """Черновики одного канала — его админу через его бота."""
+    with get_session() as session:
+        ch = get_channel(session, channel_id)
+        token = ch.bot_token if ch else ""
+        admin = _admin_id_for(ch) if ch else None
+    if not token or not admin:
+        return 0
+    with get_session() as session:
+        drafts = [
+            (d.id, d.post_text or "(пустой пост)")
+            for d in service.get_drafts(session, channel_id=channel_id)
+        ]
+    if not drafts:
+        return 0
+    bot = make_bot(token)
+    sent = 0
+    try:
+        for aid, post in drafts:
+            await bot.send_message(admin, post, reply_markup=review_keyboard(aid))
+            with get_session() as session:
+                service.mark_pending(session, aid)
+            sent += 1
+    finally:
+        await bot.session.close()
+    return sent
+
+
 async def send_drafts_all() -> int:
     """Каждому каналу — его черновики его админу через его бота."""
     with get_session() as session:
-        channels = [
-            (c.id, c.bot_token, _admin_id_for(c))
-            for c in list_channels(session)
-            if c.bot_token
-        ]
+        channel_ids = [c.id for c in list_channels(session) if c.bot_token]
     sent = 0
-    for cid, token, admin in channels:
-        if not admin:
-            continue
-        with get_session() as session:
-            drafts = [
-                (d.id, d.post_text or "(пустой пост)")
-                for d in service.get_drafts(session, channel_id=cid)
-            ]
-        if not drafts:
-            continue
-        bot = make_bot(token)
-        try:
-            for aid, post in drafts:
-                await bot.send_message(admin, post, reply_markup=review_keyboard(aid))
-                with get_session() as session:
-                    service.mark_pending(session, aid)
-                sent += 1
-        finally:
-            await bot.session.close()
+    for cid in channel_ids:
+        sent += await _send_drafts_for(cid)
     return sent
 
 
@@ -205,27 +213,88 @@ async def on_edit_text(message: Message, state: FSMContext) -> None:
     await message.answer(new_text, reply_markup=review_keyboard(article_id))
 
 
-async def _scheduled_run() -> None:
-    """Гоняет пайплайн и рассылает новые черновики по каналам на модерацию."""
+def _set_next_collect(channel_id: int, minutes: int | None) -> None:
+    """Пишем в БД время следующего планового сбора (подсказка для админки)."""
+    with get_session() as session:
+        ch = get_channel(session, channel_id)
+        if ch:
+            ch.next_collect_at = (
+                datetime.now(timezone.utc) + timedelta(minutes=minutes)
+                if minutes
+                else None
+            )
 
-    def _process() -> PipelineResult:
+
+async def _run_channel(channel_id: int) -> None:
+    """Плановый сбор по одному каналу + рассылка его черновиков на модерацию."""
+    # задача только что сработала — следующий запуск примерно через интервал
+    minutes = _collect_intervals.get(channel_id)
+    if minutes:
+        _set_next_collect(channel_id, minutes)
+
+    def _process() -> PipelineResult | None:
         from src.settings_store import apply_overrides
 
         with get_session() as session:
             apply_overrides(session)
-            return run_all_channels(session, OllamaClient())
+            ch = get_channel(session, channel_id)
+            if not ch or not ch.enabled or not ch.collect_enabled:
+                return None
+            return run_pipeline(session, OllamaClient(), ch)
 
     try:
         result = await asyncio.to_thread(_process)
     except Exception as exc:  # noqa: BLE001 — мониторинг: логируем и зовём админа
-        log.exception("scheduled run failed")
+        log.exception("scheduled collect failed for channel %s", channel_id)
         with get_session() as session:
             session.add(RunLog(ok=False, error=str(exc)[:500]))
-        await _notify_admin(f"⚠️ Прогон пайплайна упал:\n{exc}")
+        await _notify_admin(f"⚠️ Сбор по проекту #{channel_id} упал:\n{exc}")
         return
 
-    log.info("scheduled run ok: %s", result)
-    await send_drafts_all()
+    if result is None:
+        return
+    log.info("scheduled collect ok ch=%s: %s", channel_id, result)
+    await _send_drafts_for(channel_id)
+
+
+# чему равен интервал уже заведённой задачи сбора (чтобы не пересоздавать зря)
+_collect_intervals: dict[int, int] = {}
+
+
+async def _sync_collect_jobs(scheduler: AsyncIOScheduler) -> None:
+    """Сверяет задачи сбора с таблицей каналов — расписание правится из админки вживую."""
+    with get_session() as session:
+        wanted = {
+            c.id: c.collect_interval_minutes
+            for c in list_channels(session)
+            if c.enabled and c.collect_enabled and c.collect_interval_minutes > 0
+        }
+    for cid, minutes in wanted.items():
+        if _collect_intervals.get(cid) == minutes:
+            continue  # уже заведена с тем же интервалом
+        scheduler.add_job(
+            _run_channel,
+            "interval",
+            minutes=minutes,
+            args=[cid],
+            id=f"collect:{cid}",
+            replace_existing=True,
+            max_instances=1,  # один прогон проекта за раз — без самоналожения
+            coalesce=True,  # пропущенные срабатывания схлопываем в одно
+            next_run_time=datetime.now() + timedelta(minutes=minutes),
+        )
+        _collect_intervals[cid] = minutes
+        _set_next_collect(cid, minutes)
+        log.info("collect job ch=%s: каждые %s мин", cid, minutes)
+    for cid in list(_collect_intervals):
+        if cid not in wanted:
+            try:
+                scheduler.remove_job(f"collect:{cid}")
+            except Exception:  # noqa: BLE001 — задачи могло уже не быть
+                pass
+            _collect_intervals.pop(cid, None)
+            _set_next_collect(cid, None)
+            log.info("collect job ch=%s снята (выключен автосбор)", cid)
 
 
 async def _publish_due() -> None:
@@ -281,13 +350,15 @@ async def run() -> None:
         tokens = [settings.telegram_bot_token]
 
     scheduler = AsyncIOScheduler()
-    scheduler.add_job(_scheduled_run, "interval", minutes=settings.run_interval_minutes)
+    # на старте заводим задачи сбора по каждому каналу и дальше синхроним раз в минуту,
+    # чтобы правки интервала/автосбора из админки подхватывались без перезапуска
+    await _sync_collect_jobs(scheduler)
+    scheduler.add_job(_sync_collect_jobs, "interval", minutes=1, args=[scheduler])
     scheduler.add_job(_publish_due, "interval", minutes=1)
     scheduler.start()
     log.info(
-        "scheduler started: pipeline every %s min, publish-due every 1 min; "
-        "moderation bots: %d",
-        settings.run_interval_minutes,
+        "scheduler started: per-channel collect (синхр. раз в минуту), "
+        "publish-due every 1 min; moderation bots: %d",
         len(tokens),
     )
 

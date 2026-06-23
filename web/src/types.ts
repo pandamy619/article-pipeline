@@ -23,6 +23,9 @@ export interface Channel {
   enabled: boolean;
   relevance_threshold: number;
   publish_interval_minutes: number;
+  collect_enabled: boolean;
+  collect_interval_minutes: number;
+  next_collect_at: string | null;
   rss_feeds: string;
   habr_enabled: boolean;
   habr_hubs: string;

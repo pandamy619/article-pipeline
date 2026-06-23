@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -443,6 +444,9 @@ class ChannelOut(BaseModel):
     enabled: bool
     relevance_threshold: int
     publish_interval_minutes: int
+    collect_enabled: bool
+    collect_interval_minutes: int
+    next_collect_at: datetime | None
     rss_feeds: str
     habr_enabled: bool
     habr_hubs: str
@@ -462,6 +466,9 @@ def _channel_out(ch: Channel) -> ChannelOut:
         enabled=ch.enabled,
         relevance_threshold=ch.relevance_threshold,
         publish_interval_minutes=ch.publish_interval_minutes,
+        collect_enabled=ch.collect_enabled,
+        collect_interval_minutes=ch.collect_interval_minutes,
+        next_collect_at=ch.next_collect_at,
         rss_feeds=ch.rss_feeds,
         habr_enabled=ch.habr_enabled,
         habr_hubs=ch.habr_hubs,
@@ -480,6 +487,8 @@ class ChannelIn(BaseModel):
     enabled: bool | None = None
     relevance_threshold: int | None = None
     publish_interval_minutes: int | None = None
+    collect_enabled: bool | None = None
+    collect_interval_minutes: int | None = None
     rss_feeds: str | None = None
     habr_enabled: bool | None = None
     habr_hubs: str | None = None

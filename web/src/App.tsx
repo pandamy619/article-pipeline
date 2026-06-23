@@ -1034,6 +1034,8 @@ const CHANNEL_FIELDS: {
   { key: "enabled", label: "Включён", type: "bool" },
   { key: "relevance_threshold", label: "Порог релевантности (0–10)", type: "int" },
   { key: "publish_interval_minutes", label: "Интервал публикации (мин)", type: "int" },
+  { key: "collect_enabled", label: "Автосбор по расписанию", type: "bool" },
+  { key: "collect_interval_minutes", label: "Интервал сбора (мин) ⟳", type: "int" },
   { key: "rss_feeds", label: "RSS-ленты (через запятую)", type: "area" },
   { key: "habr_enabled", label: "Habr включён", type: "bool" },
   { key: "habr_hubs", label: "Habr: хабы", type: "text" },
@@ -1051,6 +1053,8 @@ const EMPTY_CHANNEL: Partial<Channel> = {
   enabled: true,
   relevance_threshold: 7,
   publish_interval_minutes: 120,
+  collect_enabled: true,
+  collect_interval_minutes: 60,
   rss_feeds: "",
   habr_enabled: false,
   habr_hubs: "",
@@ -1058,6 +1062,20 @@ const EMPTY_CHANNEL: Partial<Channel> = {
   reddit_subreddits: "",
   searxng_queries: "",
 };
+
+function nextCollectLabel(c: Channel | undefined): string {
+  if (!c) return "";
+  if (!c.collect_enabled) return "автосбор выключен";
+  if (!c.next_collect_at) return "ожидает планировщик (бот запущен?)";
+  const d = new Date(c.next_collect_at);
+  const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const diffMin = Math.round((d.getTime() - Date.now()) / 60000);
+  if (diffMin <= 0) return `сбор вот-вот (план. на ${time})`;
+  if (diffMin < 60) return `через ${diffMin} мин (в ${time})`;
+  const h = Math.floor(diffMin / 60);
+  const m = diffMin % 60;
+  return `через ${h} ч ${m} мин (в ${time})`;
+}
 
 function ChannelsPanel({
   channels,
@@ -1139,6 +1157,12 @@ function ChannelsPanel({
           + новый проект
         </button>
       </div>
+      {editId !== "new" && (
+        <div className="muted" style={{ fontSize: 12, marginBottom: 10 }}>
+          Ближайший автосбор:{" "}
+          {nextCollectLabel(channels.find((x) => x.id === editId))}
+        </div>
+      )}
       <div
         style={{
           display: "grid",
@@ -1197,8 +1221,9 @@ function ChannelsPanel({
         )}
       </div>
       <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>
-        Проект = свой Telegram-канал, бот-токен, тематика и источники. Изменения
-        применяются со следующего прогона.
+        Проект = свой Telegram-канал, бот-токен, тематика и источники. Автосбор и
+        интервал сбора (⟳) подхватываются в течение минуты; остальное — со
+        следующего прогона.
       </div>
     </div>
   );
