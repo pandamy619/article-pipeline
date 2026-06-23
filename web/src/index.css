@@ -612,15 +612,3 @@ table.tbl {
   text-align: center;
   color: var(--muted);
 }
-.working-badge {
-  position: fixed;
-  top: 16px;
-  right: 18px;
-  background: var(--text);
-  color: #fff;
-  font-size: 12px;
-  padding: 7px 14px;
-  border-radius: 999px;
-  box-shadow: var(--shadow);
-  z-index: 50;
-}

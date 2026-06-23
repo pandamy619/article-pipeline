@@ -212,8 +212,6 @@ export default function App() {
 
   return (
     <div className="shell">
-      {busy && <div className="working-badge">работаю…</div>}
-
       <aside className="sidebar">
         <div className="brand">article-pipeline</div>
 
@@ -266,7 +264,14 @@ export default function App() {
 
       <main className="main">
         <header className="main-head">
-          <h1>{VIEW_TITLES[view]}</h1>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <h1>{VIEW_TITLES[view]}</h1>
+            {busy && (
+              <span className="muted" style={{ fontSize: 13 }}>
+                обновляю…
+              </span>
+            )}
+          </div>
           <button
             className="btn btn-primary"
             disabled={busy}
