@@ -191,8 +191,7 @@ async def draft_article(article_id: int) -> dict[str, bool]:
 
 @app.post("/api/articles/{article_id}/publish")
 async def publish_article(article_id: int) -> dict[str, bool]:
-    from aiogram import Bot
-
+    from src.bot_factory import make_bot
     from src.publisher.telegram import publish
 
     with get_session() as session:
@@ -203,7 +202,7 @@ async def publish_article(article_id: int) -> dict[str, bool]:
     if not post:
         return {"ok": False}
 
-    bot = Bot(token)
+    bot = make_bot(token)
     try:
         message_id = await publish(bot, chat, post, image_url=image)
     finally:
@@ -241,8 +240,7 @@ async def bulk_action(body: BulkIn) -> dict[str, object]:
         return {"ok": True, "done": done}
 
     if body.action == "publish":
-        from aiogram import Bot
-
+        from src.bot_factory import make_bot
         from src.publisher.telegram import publish
 
         done = 0
@@ -255,7 +253,7 @@ async def bulk_action(body: BulkIn) -> dict[str, object]:
                 token, chat = _publish_target(session, rec.channel_id if rec else None)
             if not post or published:
                 continue
-            bot = Bot(token)
+            bot = make_bot(token)
             try:
                 mid = await publish(bot, chat, post, image_url=image)
             except Exception:  # noqa: BLE001 — одна не должна ронять пачку

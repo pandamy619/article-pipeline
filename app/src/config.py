@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     telegram_channel_id: str = ""
     admin_user_id: str = ""
     admin_token: str = ""  # токен для входа в веб-админку; пусто = без авторизации
+    telegram_proxy: str = ""  # http://host:port — если api.telegram.org заблокирован
 
     # Поведение
     relevance_threshold: int = 7

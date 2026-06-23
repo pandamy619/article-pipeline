@@ -12,6 +12,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
+from src.bot_factory import make_bot
 from src.channels.service import ensure_default_channel, get_channel, list_channels
 from src.config import settings
 from src.db.base import get_session
@@ -48,7 +49,7 @@ async def _notify_admin(text: str) -> None:
     admin = _admin_id()
     if not admin or not settings.telegram_bot_token:
         return
-    bot = Bot(settings.telegram_bot_token)
+    bot = make_bot(settings.telegram_bot_token)
     try:
         await bot.send_message(admin, text)
     except Exception:  # noqa: BLE001
@@ -76,7 +77,7 @@ async def send_drafts_all() -> int:
             ]
         if not drafts:
             continue
-        bot = Bot(token)
+        bot = make_bot(token)
         try:
             for aid, post in drafts:
                 await bot.send_message(admin, post, reply_markup=review_keyboard(aid))
@@ -250,7 +251,7 @@ async def _publish_due() -> None:
             )
         if not post:
             continue
-        pub_bot = Bot(token)
+        pub_bot = make_bot(token)
         try:
             mid = await publish(pub_bot, chat, post, image_url=image)
         except Exception:  # noqa: BLE001 — одна статья не должна ронять остальные
@@ -295,8 +296,22 @@ async def run() -> None:
         while True:
             await asyncio.sleep(3600)
 
-    bots = [Bot(t) for t in tokens]
-    await build_dispatcher().start_polling(*bots)
+    # ретрай: если Telegram временно недоступен, не роняем процесс, а пробуем снова
+    dp = build_dispatcher()
+    while True:
+        bots = [make_bot(t) for t in tokens]
+        try:
+            await dp.start_polling(*bots)
+            break
+        except Exception:  # noqa: BLE001 — сеть/Telegram недоступны: ждём и пробуем
+            log.exception("polling failed (Telegram unreachable?); retry in 30s")
+            await asyncio.sleep(30)
+        finally:
+            for b in bots:
+                try:
+                    await b.session.close()
+                except Exception:  # noqa: BLE001
+                    pass
 
 
 if __name__ == "__main__":
