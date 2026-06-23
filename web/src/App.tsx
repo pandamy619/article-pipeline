@@ -1005,22 +1005,48 @@ function SearchPanel({
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
   const [res, setRes] = useState<SearchResponse | null>(null);
+  const [webJob, setWebJob] = useState<CollectJob | null>(null);
+
+  const webActive =
+    webJob?.status === "queued" || webJob?.status === "running";
 
   async function go(mode: "semantic" | "web") {
     const q = query.trim();
     if (!q) return;
     setBusy(true);
     setRes(null);
+    if (mode === "web") setWebJob(null);
     try {
       const r = await searchArticles(q, mode, channel);
-      setRes(r);
-      if (mode === "web") onChanged();
+      if (mode === "web") setWebJob(r.job ?? null);
+      else setRes(r);
     } catch (e) {
       alert(`Ошибка: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setBusy(false);
     }
   }
+
+  // веб-поиск исполняет воркер — опрашиваем задачу, пока не завершится
+  useEffect(() => {
+    if (!webJob || !webActive) return;
+    const jobId = webJob.id;
+    let stop = false;
+    const id = setInterval(async () => {
+      try {
+        const j = await collectStatus(jobId);
+        if (stop) return;
+        setWebJob(j);
+        if (j.status === "done") onChanged();
+      } catch {
+        /* разовые ошибки опроса игнорируем */
+      }
+    }, 2500);
+    return () => {
+      stop = true;
+      clearInterval(id);
+    };
+  }, [webJob?.id, webActive]);
 
   return (
     <div className="card" style={{ padding: "14px 16px", marginBottom: 16 }}>
@@ -1051,10 +1077,10 @@ function SearchPanel({
         </button>
         <button
           className="btn btn-primary"
-          disabled={busy || !query.trim()}
+          disabled={busy || webActive || !query.trim()}
           onClick={() => go("web")}
         >
-          Найти в вебе
+          {webActive ? "Ищу…" : "Найти в вебе"}
         </button>
       </div>
 
@@ -1064,10 +1090,22 @@ function SearchPanel({
         </div>
       )}
 
-      {res?.mode === "web" && (
-        <div className="muted" style={{ fontSize: 13, marginTop: 10 }}>
-          Добавлено новых: {res.added}. Запросы: {(res.queries ?? []).join(", ")}.
-          Появятся в списке как черновики текущего канала.
+      {webJob && (
+        <div
+          className="muted"
+          style={{
+            fontSize: 13,
+            marginTop: 10,
+            color: webJob.status === "error" ? "#c02626" : undefined,
+          }}
+        >
+          {webActive
+            ? "идёт веб-поиск… (LLM придумывает запросы, SearXNG тянет статьи — до минуты)"
+            : webJob.status === "error"
+              ? `веб-поиск упал: ${webJob.error ?? ""}`
+              : `Добавлено новых: ${webJob.result?.added ?? 0}. Запросы: ${(
+                  (webJob.result?.queries as string[] | undefined) ?? []
+                ).join(", ")}. Появятся в списке как черновики текущего проекта.`}
         </div>
       )}
 

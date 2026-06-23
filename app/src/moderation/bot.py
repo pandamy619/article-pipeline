@@ -26,6 +26,7 @@ from src.moderation import service
 from src.moderation.keyboards import review_keyboard
 from src.pipeline import PipelineResult, run_all_channels, run_pipeline
 from src.publisher.telegram import publish
+from src.search.service import web_search_collect
 
 router = Router()
 log = logging.getLogger(__name__)
@@ -341,7 +342,14 @@ async def _drain_collect_jobs() -> None:
         with get_session() as session:
             job = session.get(CollectJob, job_id)
             channel_id = job.channel_id if job else None
+            query = job.query if job else None
             apply_overrides(session)
+            if query:
+                # веб-поиск: LLM придумывает запросы -> SearXNG -> черновики
+                added, queries = web_search_collect(
+                    session, OllamaClient(), query, channel_id=channel_id
+                )
+                return channel_id, {"added": added, "queries": queries}
             if channel_id is not None:
                 ch = get_channel(session, channel_id)
                 if not ch:

@@ -82,6 +82,42 @@ def test_drain_marks_job_error(memdb, monkeypatch):
     s.close()
 
 
+def test_drain_runs_web_search(memdb, monkeypatch):
+    import src.moderation.bot as bot
+
+    monkeypatch.setattr(bot, "OllamaClient", lambda *a, **k: object())
+    monkeypatch.setattr(
+        bot,
+        "web_search_collect",
+        lambda session, client, query, *, channel_id=None: (2, ["q1", "q2"]),
+    )
+
+    async def _noop() -> int:
+        return 0
+
+    monkeypatch.setattr(bot, "send_drafts_all", _noop)
+
+    s = memdb()
+    s.add(
+        CollectJob(
+            channel_id=None,
+            query="питон асинхронность",
+            status=CollectJobStatus.queued,
+        )
+    )
+    s.commit()
+    s.close()
+
+    asyncio.run(bot._drain_collect_jobs())
+
+    s = memdb()
+    job = s.query(CollectJob).first()
+    assert job.status == CollectJobStatus.done
+    assert '"added": 2' in (job.result or "")
+    assert "q1" in (job.result or "")
+    s.close()
+
+
 def test_drain_noop_when_empty(memdb, monkeypatch):
     import src.moderation.bot as bot
 

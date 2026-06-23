@@ -25,7 +25,7 @@ from src.db.models import (
 from src.feeds import service as feeds_service
 from src.log import setup_logging
 from src.publisher.queue import parse_when, schedule_article, unschedule
-from src.search.service import semantic_search, web_search_collect
+from src.search.service import semantic_search
 from src.settings_store import EDITABLE, apply_overrides, current_values, set_override
 
 setup_logging()
@@ -547,17 +547,35 @@ class SearchIn(BaseModel):
 @app.post("/api/search")
 async def search_api(body: SearchIn) -> dict[str, object]:
     if body.mode == "web":
-
-        def _web() -> dict[str, object]:
-            from src.llm.client import OllamaClient
-
-            with get_session() as session:
-                added, queries = web_search_collect(
-                    session, OllamaClient(), body.query, channel_id=body.channel_id
+        # веб-поиск долгий (LLM+SearXNG+рерайт) — отдаём воркеру через очередь
+        q = (body.query or "").strip()
+        if not q:
+            raise HTTPException(status_code=400, detail="empty query")
+        chan_clause = (
+            CollectJob.channel_id.is_(None)
+            if body.channel_id is None
+            else CollectJob.channel_id == body.channel_id
+        )
+        with get_session() as session:
+            active = session.scalars(
+                select(CollectJob)
+                .where(
+                    CollectJob.status.in_(
+                        [CollectJobStatus.queued, CollectJobStatus.running]
+                    ),
+                    CollectJob.query == q,
+                    chan_clause,
                 )
-                return {"mode": "web", "added": added, "queries": queries}
-
-        return await asyncio.to_thread(_web)
+                .order_by(CollectJob.created_at)
+            ).first()
+            if active:
+                return {"mode": "web", "job": _job_out(active).model_dump(mode="json")}
+            job = CollectJob(
+                channel_id=body.channel_id, query=q, status=CollectJobStatus.queued
+            )
+            session.add(job)
+            session.flush()
+            return {"mode": "web", "job": _job_out(job).model_dump(mode="json")}
 
     def _sem() -> dict[str, object]:
         from src.llm.client import OllamaClient
@@ -587,8 +605,9 @@ async def search_api(body: SearchIn) -> dict[str, object]:
 class CollectJobOut(BaseModel):
     id: int
     channel_id: int | None
+    query: str | None = None  # задан => веб-поиск
     status: str
-    result: dict[str, int] | None = None
+    result: dict[str, object] | None = None  # сбор: счётчики; веб-поиск: added+queries
     error: str | None = None
     created_at: datetime
     started_at: datetime | None = None
@@ -599,6 +618,7 @@ def _job_out(job: CollectJob) -> CollectJobOut:
     return CollectJobOut(
         id=job.id,
         channel_id=job.channel_id,
+        query=job.query,
         status=job.status.value,
         result=json.loads(job.result) if job.result else None,
         error=job.error,
@@ -617,13 +637,15 @@ def collect_now(channel: int | None = None) -> CollectJobOut:
         else CollectJob.channel_id == channel
     )
     with get_session() as session:
-        # не плодим дубли: если по этому проекту уже есть активная задача — вернём её
+        # не плодим дубли: если по этому проекту уже есть активный сбор — вернём его
+        # (query IS NULL — чтобы не путать с задачами веб-поиска)
         active = session.scalars(
             select(CollectJob)
             .where(
                 CollectJob.status.in_(
                     [CollectJobStatus.queued, CollectJobStatus.running]
                 ),
+                CollectJob.query.is_(None),
                 chan_clause,
             )
             .order_by(CollectJob.created_at)

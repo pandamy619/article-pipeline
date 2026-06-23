@@ -241,6 +241,7 @@ export interface SearchResponse {
   results?: SearchResult[];
   added?: number;
   queries?: string[];
+  job?: CollectJob; // веб-поиск выполняется воркером — здесь задача для опроса
 }
 
 export async function searchArticles(

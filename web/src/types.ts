@@ -58,8 +58,9 @@ export interface LastRun {
 export interface CollectJob {
   id: number;
   channel_id: number | null;
+  query: string | null; // задан => веб-поиск
   status: "queued" | "running" | "done" | "error";
-  result: Record<string, number> | null;
+  result: Record<string, number | string[]> | null;
   error: string | null;
   created_at: string;
   started_at: string | null;

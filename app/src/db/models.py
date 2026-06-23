@@ -161,6 +161,9 @@ class CollectJob(Base):
     channel_id: Mapped[int | None] = mapped_column(
         Integer, nullable=True
     )  # None = все проекты
+    query: Mapped[str | None] = mapped_column(
+        Text, nullable=True
+    )  # задан => это веб-поиск, иначе обычный сбор
     status: Mapped[CollectJobStatus] = mapped_column(
         Enum(CollectJobStatus, native_enum=False, length=16),
         default=CollectJobStatus.queued,

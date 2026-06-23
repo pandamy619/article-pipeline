@@ -274,6 +274,20 @@ def test_collect_enqueue_status_dedup(client):
     assert client.post("/api/collect").json()["id"] == jid
 
 
+def test_search_web_enqueues_job(client):
+    r = client.post(
+        "/api/search", json={"query": "асинхронный python", "mode": "web"}
+    ).json()
+    assert r["mode"] == "web"
+    assert r["job"]["status"] == "queued"
+    assert r["job"]["query"] == "асинхронный python"
+    # повторный запрос с тем же query/каналом не плодит дубль
+    again = client.post(
+        "/api/search", json={"query": "асинхронный python", "mode": "web"}
+    ).json()
+    assert again["job"]["id"] == r["job"]["id"]
+
+
 def test_chat(client, monkeypatch):
     import src.llm.client as llm
 
