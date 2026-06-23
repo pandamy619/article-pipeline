@@ -1,10 +1,11 @@
-# Команды для разработки (Mac). Прод на Windows — см. docs/deploy-windows.md
+# Dev на Mac (Ollama нативная). Windows-прод (GPU) — цели win-* ниже.
+# На Windows make запускают из WSL или git-bash (choco install make / wsl).
 COMPOSE = docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml
 # Прод (Windows + GPU): без dev-оверрайда, с профилем gpu (ollama в контейнере)
 PROD = docker compose -f deploy/docker-compose.yml --profile gpu
 
 .PHONY: up down logs ps collect migrate reset reset-all clean test \
-        prod-up prod-down prod-logs prod-ps prod-collect
+        win-up win-down win-logs win-app win-ps win-pull win-migrate win-collect
 
 # поднять весь стек (dev; Ollama — нативная, не в Docker)
 up:
@@ -46,20 +47,36 @@ clean:
 test:
 	cd app && poetry run pytest -q && poetry run ruff check .
 
-# --- Прод (Windows + GPU) ---
-# поднять весь стек с GPU-Ollama (модели подтянутся автоматически при первом запуске)
-prod-up:
+# --- Windows (прод, GPU) ---
+# СБОРКА И ЗАПУСК всего стека на Windows с GPU-Ollama
+# (модели подтянутся автоматически при первом запуске — это долго)
+win-up:
 	$(PROD) up -d --build
 
-prod-down:
+# остановить
+win-down:
 	$(PROD) down
 
-prod-logs:
+# логи всех сервисов
+win-logs:
 	$(PROD) logs -f
 
-prod-ps:
+# логи только основного сервиса (бот + планировщик)
+win-app:
+	$(PROD) logs -f app
+
+# статус контейнеров
+win-ps:
 	$(PROD) ps
 
-# разовый прогон пайплайна на проде
-prod-collect:
+# пере-скачать модели из .env (LLM_MODEL / EMBED_MODEL)
+win-pull:
+	$(PROD) up -d ollama-pull
+
+# применить миграции вручную (обычно app делает это сам при старте)
+win-migrate:
+	$(PROD) exec app alembic upgrade head
+
+# разовый прогон пайплайна
+win-collect:
 	$(PROD) exec app python -m src collect
