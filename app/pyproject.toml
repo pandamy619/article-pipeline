@@ -25,6 +25,7 @@ APScheduler = "*"
 # Веб-админка
 fastapi = "*"
 uvicorn = { extras = ["standard"], version = "*" }
+aiohttp-socks = "^0.11.0"
 
 [tool.poetry.group.dev.dependencies]
 ruff = "*"
