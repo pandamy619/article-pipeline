@@ -55,18 +55,21 @@ const NAV: { key: View; label: string }[] = [
   { key: "articles", label: "Статьи" },
   { key: "queue", label: "Очередь" },
   { key: "search", label: "Поиск" },
-  { key: "channels", label: "Каналы" },
   { key: "feeds", label: "Ленты" },
   { key: "settings", label: "Настройки" },
+  { key: "channels", label: "Проекты" },
 ];
 const VIEW_TITLES: Record<View, string> = {
   articles: "Статьи",
   queue: "Очередь",
   search: "Поиск",
-  channels: "Каналы",
+  channels: "Проекты",
   feeds: "Ленты",
   settings: "Настройки",
 };
+
+type SortKey = "id" | "status" | "score" | "source";
+type Sort = { key: SortKey; dir: "asc" | "desc" };
 
 export default function App() {
   const [articles, setArticles] = useState<Article[]>([]);
@@ -81,10 +84,13 @@ export default function App() {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [channels, setChannels] = useState<Channel[]>([]);
   const [currentChannel, setCurrentChannel] = useState<number | null>(null);
+  const [sort, setSort] = useState<Sort>({ key: "id", dir: "desc" });
 
   async function loadChannels() {
     try {
-      setChannels(await fetchChannels());
+      const cs = await fetchChannels();
+      setChannels(cs);
+      setCurrentChannel((cur) => cur ?? cs[0]?.id ?? null);
     } catch (e) {
       if (e instanceof AuthError) setNeedLogin(true);
     }
@@ -114,6 +120,22 @@ export default function App() {
     setSelected(new Set());
     refresh(filter, currentChannel);
   }, [filter, currentChannel]);
+
+  // авто-обновление: тихо подтягиваем свежие данные каждые 15с (если не заняты)
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (!busy && !needLogin) refresh(filter, currentChannel);
+    }, 15000);
+    return () => clearInterval(id);
+  }, [filter, currentChannel, busy, needLogin]);
+
+  function toggleSort(key: SortKey) {
+    setSort((s) =>
+      s.key === key
+        ? { key, dir: s.dir === "asc" ? "desc" : "asc" }
+        : { key, dir: key === "id" || key === "score" ? "desc" : "asc" },
+    );
+  }
 
   function toggleSel(id: number) {
     setSelected((prev) => {
@@ -165,13 +187,26 @@ export default function App() {
     );
   }
 
-  // в очереди — показываем по времени публикации (ближайшие сверху)
-  const rows =
-    filter === "scheduled"
-      ? [...articles].sort((a, b) =>
-          (a.scheduled_at ?? "").localeCompare(b.scheduled_at ?? ""),
-        )
-      : articles;
+  // в очереди — по времени публикации; иначе — по выбранной колонке
+  const rows = [...articles].sort((a, b) => {
+    if (filter === "scheduled") {
+      return (a.scheduled_at ?? "").localeCompare(b.scheduled_at ?? "");
+    }
+    const dir = sort.dir === "asc" ? 1 : -1;
+    let cmp = 0;
+    if (sort.key === "score") {
+      cmp = (a.relevance_score ?? -1) - (b.relevance_score ?? -1);
+    } else if (sort.key === "status") {
+      cmp = a.status.localeCompare(b.status);
+    } else if (sort.key === "source") {
+      cmp = (a.source ?? "").localeCompare(b.source ?? "");
+    } else {
+      cmp = a.id - b.id;
+    }
+    return dir * cmp;
+  });
+  const caret = (k: SortKey) =>
+    sort.key === k ? (sort.dir === "asc" ? " ↑" : " ↓") : "";
 
   return (
     <div className="shell">
@@ -179,6 +214,25 @@ export default function App() {
 
       <aside className="sidebar">
         <div className="brand">article-pipeline</div>
+
+        <div className="project-switch">
+          <span className="project-label">Проект</span>
+          <select
+            className="project-select"
+            value={currentChannel ?? ""}
+            onChange={(e) =>
+              setCurrentChannel(e.target.value ? Number(e.target.value) : null)
+            }
+          >
+            <option value="">Все проекты</option>
+            {channels.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name || `проект #${c.id}`}
+              </option>
+            ))}
+          </select>
+        </div>
+
         {NAV.map((n) => (
           <button
             key={n.key}
@@ -194,29 +248,6 @@ export default function App() {
         ))}
         <div className="sidebar-spacer" />
         <div className="sidebar-foot">
-          <select
-            value={currentChannel ?? ""}
-            onChange={(e) =>
-              setCurrentChannel(e.target.value ? Number(e.target.value) : null)
-            }
-            title="канал"
-            style={{
-              border: "1px solid var(--line-strong)",
-              borderRadius: 8,
-              padding: "7px 10px",
-              fontSize: 13,
-              background: "var(--card)",
-              color: "var(--text)",
-              fontFamily: "inherit",
-            }}
-          >
-            <option value="">Все каналы</option>
-            {channels.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name || `#${c.id}`}
-              </option>
-            ))}
-          </select>
           {getToken() && (
             <button
               className="btn"
@@ -237,9 +268,10 @@ export default function App() {
           <button
             className="btn btn-primary"
             disabled={busy}
+            style={{ minWidth: 152 }}
             onClick={() => run(() => collect())}
           >
-            {busy ? "…" : "Собрать сейчас"}
+            {busy ? "Собираю…" : "Собрать сейчас"}
           </button>
         </header>
 
@@ -356,11 +388,31 @@ export default function App() {
                   }
                 />
               </th>
-              <th style={{ width: 36 }}>#</th>
-              <th style={{ width: 158 }}>статус</th>
-              <th style={{ width: 56 }}>оценка</th>
+              <th
+                style={{ width: 36, cursor: "pointer" }}
+                onClick={() => toggleSort("id")}
+              >
+                #{caret("id")}
+              </th>
+              <th
+                style={{ width: 158, cursor: "pointer" }}
+                onClick={() => toggleSort("status")}
+              >
+                статус{caret("status")}
+              </th>
+              <th
+                style={{ width: 56, cursor: "pointer" }}
+                onClick={() => toggleSort("score")}
+              >
+                оценка{caret("score")}
+              </th>
               <th>заголовок и причина</th>
-              <th style={{ width: 100 }}>источник</th>
+              <th
+                style={{ width: 100, cursor: "pointer" }}
+                onClick={() => toggleSort("source")}
+              >
+                источник{caret("source")}
+              </th>
               <th style={{ width: 270 }}>действия</th>
             </tr>
           </thead>
@@ -957,9 +1009,9 @@ const CHANNEL_FIELDS: {
   label: string;
   type: "text" | "int" | "bool" | "area";
 }[] = [
-  { key: "name", label: "Название", type: "text" },
+  { key: "name", label: "Название проекта", type: "text" },
   { key: "bot_token", label: "Бот-токен", type: "text" },
-  { key: "channel_id", label: "Channel ID (@name или -100…)", type: "text" },
+  { key: "channel_id", label: "Telegram-канал (@name или -100…)", type: "text" },
   { key: "admin_user_id", label: "Admin user id", type: "text" },
   { key: "topic", label: "Тематика (для фильтра)", type: "area" },
   { key: "enabled", label: "Включён", type: "bool" },
@@ -1029,7 +1081,7 @@ function ChannelsPanel({
 
   async function remove() {
     if (editId === "new") return;
-    if (!confirm("Удалить канал? Его статьи отвяжутся.")) return;
+    if (!confirm("Удалить проект? Его статьи отвяжутся.")) return;
     setBusy(true);
     try {
       await deleteChannel(editId);
@@ -1060,14 +1112,14 @@ function ChannelsPanel({
             className={`chip${editId === c.id ? " active" : ""}`}
             onClick={() => pick(c.id)}
           >
-            {c.name || `#${c.id}`}
+            {c.name || `проект #${c.id}`}
           </button>
         ))}
         <button
           className={`chip${editId === "new" ? " active" : ""}`}
           onClick={() => pick("new")}
         >
-          + новый
+          + новый проект
         </button>
       </div>
       <div
@@ -1123,12 +1175,12 @@ function ChannelsPanel({
         </button>
         {editId !== "new" && (
           <button className="btn" disabled={busy} onClick={remove}>
-            Удалить канал
+            Удалить проект
           </button>
         )}
       </div>
       <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>
-        У каждого канала свой бот-токен, тематика и источники. Изменения
+        Проект = свой Telegram-канал, бот-токен, тематика и источники. Изменения
         применяются со следующего прогона.
       </div>
     </div>

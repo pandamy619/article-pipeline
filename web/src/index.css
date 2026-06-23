@@ -53,7 +53,31 @@ body {
   font-size: 15px;
   font-weight: 650;
   letter-spacing: -0.01em;
-  padding: 4px 10px 16px;
+  padding: 4px 10px 14px;
+}
+.project-switch {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 4px 8px 14px;
+}
+.project-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.project-select {
+  width: 100%;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  padding: 8px 10px;
+  font-size: 14px;
+  font-weight: 500;
+  background: var(--card);
+  color: var(--text);
+  font-family: inherit;
+  cursor: pointer;
 }
 .nav-item {
   appearance: none;
