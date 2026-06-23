@@ -559,28 +559,48 @@ export default function App() {
                   <td className="muted">{a.source}</td>
                   <td>
                     <div className="actions">
-                      {a.post_text ? (
-                        <>
-                          <button
-                            className={`alink${
-                              openId === a.id && mode === "preview" ? " on" : ""
-                            }`}
-                            onClick={() => toggle(a.id, "preview")}
-                          >
-                            превью
-                          </button>
-                          <button
-                            className={`alink${
-                              openId === a.id && mode === "edit" ? " on" : ""
-                            }`}
-                            onClick={() => toggle(a.id, "edit")}
-                          >
-                            правка
-                          </button>
-                          {a.status !== "published" && (
+                      {(() => {
+                        // показываем все кнопки всегда; гасим по статусу/наличию поста
+                        const locked = busy || a.status === "rejected";
+                        const hasPost = !!a.post_text;
+                        const published = a.status === "published";
+                        return (
+                          <>
                             <button
                               className="alink"
-                              disabled={busy}
+                              disabled={locked || published || hasPost}
+                              title={
+                                a.status === "rejected"
+                                  ? "сначала смените статус"
+                                  : hasPost
+                                    ? "пост уже создан"
+                                    : "сгенерировать пост"
+                              }
+                              onClick={() => run(() => runAction(a.id, "draft"))}
+                            >
+                              сделать пост
+                            </button>
+                            <button
+                              className={`alink${
+                                openId === a.id && mode === "preview" ? " on" : ""
+                              }`}
+                              disabled={locked || !hasPost}
+                              onClick={() => toggle(a.id, "preview")}
+                            >
+                              превью
+                            </button>
+                            <button
+                              className={`alink${
+                                openId === a.id && mode === "edit" ? " on" : ""
+                              }`}
+                              disabled={locked || !hasPost}
+                              onClick={() => toggle(a.id, "edit")}
+                            >
+                              правка
+                            </button>
+                            <button
+                              className="alink"
+                              disabled={locked || !hasPost || published}
                               onClick={() => {
                                 if (confirm("Опубликовать пост в Telegram-канал?")) {
                                   run(() => runAction(a.id, "publish"));
@@ -589,27 +609,18 @@ export default function App() {
                             >
                               опубликовать
                             </button>
-                          )}
-                          {a.status !== "published" && (
                             <button
                               className={`alink${
                                 openId === a.id && mode === "schedule" ? " on" : ""
                               }`}
+                              disabled={locked || !hasPost || published}
                               onClick={() => toggle(a.id, "schedule")}
                             >
                               в очередь
                             </button>
-                          )}
-                        </>
-                      ) : (
-                        <button
-                          className="alink"
-                          disabled={busy}
-                          onClick={() => run(() => runAction(a.id, "draft"))}
-                        >
-                          сделать пост
-                        </button>
-                      )}
+                          </>
+                        );
+                      })()}
                     </div>
                   </td>
                 </tr>
