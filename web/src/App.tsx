@@ -560,7 +560,8 @@ export default function App() {
                   <td>
                     <div className="actions">
                       {(() => {
-                        // показываем все кнопки всегда; гасим по статусу/наличию поста
+                        // единственный замок — статус: отклонена/занят гасят всё.
+                        // Иначе кнопки доступны; панели работают и без готового поста.
                         const locked = busy || a.status === "rejected";
                         const hasPost = !!a.post_text;
                         const published = a.status === "published";
@@ -573,8 +574,8 @@ export default function App() {
                                 a.status === "rejected"
                                   ? "сначала смените статус"
                                   : hasPost
-                                    ? "пост уже создан"
-                                    : "сгенерировать пост"
+                                    ? "пост уже создан — правьте в «правка»"
+                                    : "сгенерировать пост ИИ"
                               }
                               onClick={() => run(() => runAction(a.id, "draft"))}
                             >
@@ -584,7 +585,7 @@ export default function App() {
                               className={`alink${
                                 openId === a.id && mode === "preview" ? " on" : ""
                               }`}
-                              disabled={locked || !hasPost}
+                              disabled={locked}
                               onClick={() => toggle(a.id, "preview")}
                             >
                               превью
@@ -593,15 +594,22 @@ export default function App() {
                               className={`alink${
                                 openId === a.id && mode === "edit" ? " on" : ""
                               }`}
-                              disabled={locked || !hasPost}
+                              disabled={locked}
                               onClick={() => toggle(a.id, "edit")}
                             >
                               правка
                             </button>
                             <button
                               className="alink"
-                              disabled={locked || !hasPost || published}
+                              disabled={locked || published}
+                              title={!hasPost ? "сначала создайте пост" : undefined}
                               onClick={() => {
+                                if (!a.post_text) {
+                                  alert(
+                                    "Сначала создайте пост — «сделать пост» или «правка».",
+                                  );
+                                  return;
+                                }
                                 if (confirm("Опубликовать пост в Telegram-канал?")) {
                                   run(() => runAction(a.id, "publish"));
                                 }
@@ -613,7 +621,7 @@ export default function App() {
                               className={`alink${
                                 openId === a.id && mode === "schedule" ? " on" : ""
                               }`}
-                              disabled={locked || !hasPost || published}
+                              disabled={locked || published}
                               onClick={() => toggle(a.id, "schedule")}
                             >
                               в очередь
@@ -624,12 +632,12 @@ export default function App() {
                     </div>
                   </td>
                 </tr>
-                {openId === a.id && a.post_text && (
+                {openId === a.id && (
                   <tr>
                     <td colSpan={7} className="panel-cell">
                       {mode === "preview" ? (
                         <PreviewPanel
-                          text={a.post_text}
+                          text={a.post_text ?? ""}
                           image={a.image_url}
                           onEdit={() => setMode("edit")}
                         />
@@ -746,10 +754,17 @@ function PreviewPanel({
       <div className="col">
         <div className="toolbar">
           <button className="btn" onClick={onEdit}>
-            Редактировать
+            {text.trim() ? "Редактировать" : "Создать пост"}
           </button>
         </div>
-        <TelegramView text={text} image={image} />
+        {text.trim() ? (
+          <TelegramView text={text} image={image} />
+        ) : (
+          <div className="muted" style={{ fontSize: 13, padding: "8px 2px" }}>
+            Поста ещё нет. «сделать пост» — сгенерирует ИИ, либо «Создать пост» —
+            напишите вручную.
+          </div>
+        )}
       </div>
     </div>
   );
@@ -898,6 +913,7 @@ function SchedulePanel({
 }) {
   const [when, setWhen] = useState(toLocalInput(article.scheduled_at));
   const [busy, setBusy] = useState(false);
+  const hasPost = !!article.post_text;
 
   async function wrap(fn: () => Promise<void>) {
     setBusy(true);
@@ -919,6 +935,12 @@ function SchedulePanel({
             ? `В очереди на ${new Date(article.scheduled_at).toLocaleString()}`
             : "Не в очереди"}
         </div>
+        {!hasPost && (
+          <div style={{ fontSize: 13, marginBottom: 10, color: "#c02626" }}>
+            Сначала создайте пост («сделать пост» или «правка») — иначе ставить в
+            очередь нечего.
+          </div>
+        )}
         <div
           style={{
             display: "flex",
@@ -942,7 +964,7 @@ function SchedulePanel({
           />
           <button
             className="btn"
-            disabled={busy || !when}
+            disabled={busy || !when || !hasPost}
             onClick={() =>
               wrap(() => scheduleArticle(article.id, new Date(when).toISOString()))
             }
@@ -953,7 +975,7 @@ function SchedulePanel({
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button
             className="btn btn-primary"
-            disabled={busy}
+            disabled={busy || !hasPost}
             onClick={() => wrap(() => scheduleArticle(article.id, null))}
           >
             В очередь (авто, +интервал)
