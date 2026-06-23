@@ -256,6 +256,24 @@ def test_last_run_reports_metrics(client):
     assert data["ok"] is True
 
 
+def test_collect_enqueue_status_dedup(client):
+    # ставим сбор в очередь — возвращается задача queued
+    job = client.post("/api/collect").json()
+    assert job["status"] == "queued"
+    assert job["channel_id"] is None
+    jid = job["id"]
+
+    # статус по id
+    st = client.get(f"/api/collect/status/{jid}").json()
+    assert st["id"] == jid and st["status"] == "queued"
+
+    # активные содержат её
+    assert any(j["id"] == jid for j in client.get("/api/collect/active").json())
+
+    # повторный запрос не плодит дубль — та же задача
+    assert client.post("/api/collect").json()["id"] == jid
+
+
 def test_chat(client, monkeypatch):
     import src.llm.client as llm
 

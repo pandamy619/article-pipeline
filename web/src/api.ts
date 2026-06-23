@@ -1,4 +1,12 @@
-import type { Article, ArticleAction, Channel, Feed, LastRun, Stats } from "./types";
+import type {
+  Article,
+  ArticleAction,
+  Channel,
+  CollectJob,
+  Feed,
+  LastRun,
+  Stats,
+} from "./types";
 
 const TOKEN_KEY = "admin_token";
 
@@ -134,10 +142,23 @@ export async function setArticleStatus(id: number, status: string): Promise<void
   }
 }
 
-export async function collect(channel?: number | null): Promise<void> {
+export async function collect(channel?: number | null): Promise<CollectJob> {
   const q = channel != null ? `?channel=${channel}` : "";
   const r = await req(`/api/collect${q}`, { method: "POST" });
   if (!r.ok) throw new Error(`collect: HTTP ${r.status}`);
+  return r.json();
+}
+
+export async function collectStatus(id: number): Promise<CollectJob> {
+  const r = await req(`/api/collect/status/${id}`);
+  if (!r.ok) throw new Error(`collect status: HTTP ${r.status}`);
+  return r.json();
+}
+
+export async function collectActive(): Promise<CollectJob[]> {
+  const r = await req("/api/collect/active");
+  if (!r.ok) throw new Error(`collect active: HTTP ${r.status}`);
+  return r.json();
 }
 
 export async function savePost(id: number, text: string): Promise<void> {

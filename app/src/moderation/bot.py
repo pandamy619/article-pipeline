@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from datetime import datetime, timedelta, timezone
 
@@ -12,17 +13,18 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from sqlalchemy import select
 
 from src.bot_factory import make_bot
 from src.channels.service import ensure_default_channel, get_channel, list_channels
 from src.config import settings
 from src.db.base import get_session
-from src.db.models import ArticleRecord, RunLog
+from src.db.models import ArticleRecord, CollectJob, CollectJobStatus, RunLog
 from src.feeds import service as feeds_service
 from src.llm.client import OllamaClient
 from src.moderation import service
 from src.moderation.keyboards import review_keyboard
-from src.pipeline import PipelineResult, run_pipeline
+from src.pipeline import PipelineResult, run_all_channels, run_pipeline
 from src.publisher.telegram import publish
 
 router = Router()
@@ -297,6 +299,102 @@ async def _sync_collect_jobs(scheduler: AsyncIOScheduler) -> None:
             log.info("collect job ch=%s снята (выключен автосбор)", cid)
 
 
+_STALE_RUNNING = timedelta(minutes=30)
+
+
+async def _drain_collect_jobs() -> None:
+    """Бот = воркер: берёт одну очередную задачу ручного сбора и выполняет её."""
+
+    def _claim() -> int | None:
+        now = datetime.now(timezone.utc)
+        with get_session() as session:
+            # подвисшие running (воркер падал в процессе) — отпускаем как error
+            stale = session.scalars(
+                select(CollectJob).where(
+                    CollectJob.status == CollectJobStatus.running,
+                    CollectJob.started_at < now - _STALE_RUNNING,
+                )
+            ).all()
+            for j in stale:
+                j.status = CollectJobStatus.error
+                j.error = "воркер перезапустился во время выполнения"
+                j.finished_at = now
+            job = session.scalars(
+                select(CollectJob)
+                .where(CollectJob.status == CollectJobStatus.queued)
+                .order_by(CollectJob.created_at)
+                .limit(1)
+            ).first()
+            if not job:
+                return None
+            job.status = CollectJobStatus.running
+            job.started_at = now
+            return job.id
+
+    job_id = await asyncio.to_thread(_claim)
+    if job_id is None:
+        return
+
+    def _process() -> tuple[int | None, dict]:
+        from src.settings_store import apply_overrides
+
+        with get_session() as session:
+            job = session.get(CollectJob, job_id)
+            channel_id = job.channel_id if job else None
+            apply_overrides(session)
+            if channel_id is not None:
+                ch = get_channel(session, channel_id)
+                if not ch:
+                    raise RuntimeError(f"проект #{channel_id} не найден")
+                res = run_pipeline(session, OllamaClient(), ch)
+            else:
+                res = run_all_channels(session, OllamaClient())
+            return channel_id, {
+                "collected": res.collected,
+                "added": res.added,
+                "duplicates": res.duplicates,
+                "semantic_duplicates": res.semantic_duplicates,
+                "filtered": res.filtered,
+                "rejected": res.rejected,
+                "drafted": res.drafted,
+            }
+
+    channel_id: int | None = None
+    summary: dict | None = None
+    error: str | None = None
+    try:
+        channel_id, summary = await asyncio.to_thread(_process)
+    except Exception as exc:  # noqa: BLE001 — помечаем задачу error + зовём админа
+        log.exception("collect job %s failed", job_id)
+        error = str(exc)[:500]
+
+    def _finish() -> None:
+        with get_session() as session:
+            job = session.get(CollectJob, job_id)
+            if not job:
+                return
+            if error is None:
+                job.status = CollectJobStatus.done
+                job.result = json.dumps(summary)
+            else:
+                job.status = CollectJobStatus.error
+                job.error = error
+            job.finished_at = datetime.now(timezone.utc)
+
+    await asyncio.to_thread(_finish)
+
+    if error is None:
+        log.info("collect job %s done: %s", job_id, summary)
+        if channel_id is not None:
+            await _send_drafts_for(channel_id)
+        else:
+            await send_drafts_all()
+    else:
+        with get_session() as session:
+            session.add(RunLog(ok=False, error=error))
+        await _notify_admin(f"⚠️ Ручной сбор (job {job_id}) упал:\n{error}")
+
+
 async def _publish_due() -> None:
     """Публикует статьи из очереди, у которых подошло время (через бот канала)."""
     from src.channels.service import get_channel
@@ -355,10 +453,19 @@ async def run() -> None:
     await _sync_collect_jobs(scheduler)
     scheduler.add_job(_sync_collect_jobs, "interval", minutes=1, args=[scheduler])
     scheduler.add_job(_publish_due, "interval", minutes=1)
+    # ручной сбор из админки: разбираем очередь задач каждые 5 c (по одной за раз)
+    scheduler.add_job(
+        _drain_collect_jobs,
+        "interval",
+        seconds=5,
+        id="collect-drain",
+        max_instances=1,
+        coalesce=True,
+    )
     scheduler.start()
     log.info(
         "scheduler started: per-channel collect (синхр. раз в минуту), "
-        "publish-due every 1 min; moderation bots: %d",
+        "publish-due 1 min, collect-drain 5 s; moderation bots: %d",
         len(tokens),
     )
 

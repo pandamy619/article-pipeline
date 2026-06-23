@@ -8,6 +8,8 @@ import {
   checkAuth,
   clearToken,
   collect,
+  collectActive,
+  collectStatus,
   createChannel,
   deleteChannel,
   deleteFeed,
@@ -29,7 +31,7 @@ import {
   unscheduleArticle,
   updateChannel,
 } from "./api";
-import type { Article, Channel, Feed, LastRun, Stats } from "./types";
+import type { Article, Channel, CollectJob, Feed, LastRun, Stats } from "./types";
 
 const STATUSES = [
   "new",
@@ -85,6 +87,29 @@ export default function App() {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [currentChannel, setCurrentChannel] = useState<number | null>(null);
   const [sort, setSort] = useState<Sort>({ key: "id", dir: "desc" });
+  const [collectJob, setCollectJob] = useState<CollectJob | null>(null);
+
+  const collecting =
+    collectJob?.status === "queued" || collectJob?.status === "running";
+  const collectNote = !collectJob
+    ? ""
+    : collectJob.status === "queued"
+      ? "сбор в очереди…"
+      : collectJob.status === "running"
+        ? "идёт сбор…"
+        : collectJob.status === "done"
+          ? `готово: +${collectJob.result?.added ?? 0}, черновиков ${collectJob.result?.drafted ?? 0}`
+          : "сбор упал";
+
+  async function startCollect() {
+    try {
+      const job = await collect(currentChannel);
+      setCollectJob(job);
+    } catch (e) {
+      if (e instanceof AuthError) setNeedLogin(true);
+      else alert(`Не удалось запустить сбор: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
 
   async function loadChannels() {
     try {
@@ -128,6 +153,44 @@ export default function App() {
     }, 15000);
     return () => clearInterval(id);
   }, [filter, currentChannel, busy, needLogin]);
+
+  // при загрузке восстанавливаем активную задачу сбора (переживает перезагрузку)
+  useEffect(() => {
+    collectActive()
+      .then((jobs) => {
+        if (jobs.length) setCollectJob(jobs[0]);
+      })
+      .catch(() => {});
+  }, []);
+
+  // пока задача сбора активна — опрашиваем её статус и по готовности обновляем
+  useEffect(() => {
+    if (!collectJob) return;
+    if (collectJob.status !== "queued" && collectJob.status !== "running") return;
+    const jobId = collectJob.id;
+    let stop = false;
+    const id = setInterval(async () => {
+      try {
+        const j = await collectStatus(jobId);
+        if (stop) return;
+        setCollectJob(j);
+        if (j.status === "done" || j.status === "error") {
+          await refresh(filter, currentChannel);
+          if (j.status === "error") alert(`Сбор упал: ${j.error ?? ""}`);
+          setTimeout(
+            () => setCollectJob((c) => (c && c.id === j.id ? null : c)),
+            7000,
+          );
+        }
+      } catch (e) {
+        if (e instanceof AuthError) setNeedLogin(true);
+      }
+    }, 2500);
+    return () => {
+      stop = true;
+      clearInterval(id);
+    };
+  }, [collectJob?.id, collectJob?.status, filter, currentChannel]);
 
   function toggleSort(key: SortKey) {
     setSort((s) =>
@@ -271,14 +334,25 @@ export default function App() {
                 обновляю…
               </span>
             )}
+            {collectNote && (
+              <span
+                className="muted"
+                style={{
+                  fontSize: 13,
+                  color: collectJob?.status === "error" ? "#c02626" : undefined,
+                }}
+              >
+                {collectNote}
+              </span>
+            )}
           </div>
           <button
             className="btn btn-primary"
-            disabled={busy}
+            disabled={busy || collecting}
             style={{ minWidth: 152 }}
-            onClick={() => run(() => collect(currentChannel))}
+            onClick={startCollect}
           >
-            {busy ? "Собираю…" : "Собрать сейчас"}
+            {collecting ? "Собираю…" : "Собрать сейчас"}
           </button>
         </header>
 

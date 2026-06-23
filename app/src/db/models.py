@@ -143,3 +143,37 @@ class Channel(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow
     )
+
+
+class CollectJobStatus(str, enum.Enum):
+    queued = "queued"  # поставлена в очередь админкой
+    running = "running"  # воркер (контейнер app) взял в работу
+    done = "done"
+    error = "error"
+
+
+class CollectJob(Base):
+    """Запрос ручного сбора: админка ставит в очередь, бот-воркер разбирает."""
+
+    __tablename__ = "collect_jobs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    channel_id: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )  # None = все проекты
+    status: Mapped[CollectJobStatus] = mapped_column(
+        Enum(CollectJobStatus, native_enum=False, length=16),
+        default=CollectJobStatus.queued,
+        index=True,
+    )
+    result: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON-сводка
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, index=True
+    )
+    started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )

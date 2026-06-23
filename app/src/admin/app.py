@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import datetime
 
 from fastapi import Depends, FastAPI, Header, HTTPException
@@ -13,7 +14,14 @@ from sqlalchemy import func, select
 from src.channels import service as channels_service
 from src.config import settings
 from src.db.base import get_session
-from src.db.models import ArticleRecord, ArticleStatus, Channel, RunLog
+from src.db.models import (
+    ArticleRecord,
+    ArticleStatus,
+    Channel,
+    CollectJob,
+    CollectJobStatus,
+    RunLog,
+)
 from src.feeds import service as feeds_service
 from src.log import setup_logging
 from src.publisher.queue import parse_when, schedule_article, unschedule
@@ -576,20 +584,77 @@ async def search_api(body: SearchIn) -> dict[str, object]:
     return await asyncio.to_thread(_sem)
 
 
+class CollectJobOut(BaseModel):
+    id: int
+    channel_id: int | None
+    status: str
+    result: dict[str, int] | None = None
+    error: str | None = None
+    created_at: datetime
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+
+
+def _job_out(job: CollectJob) -> CollectJobOut:
+    return CollectJobOut(
+        id=job.id,
+        channel_id=job.channel_id,
+        status=job.status.value,
+        result=json.loads(job.result) if job.result else None,
+        error=job.error,
+        created_at=job.created_at,
+        started_at=job.started_at,
+        finished_at=job.finished_at,
+    )
+
+
 @app.post("/api/collect")
-async def collect_now(channel: int | None = None) -> dict[str, bool]:
-    def _run() -> None:
-        from src.channels.service import get_channel
-        from src.llm.client import OllamaClient
-        from src.pipeline import run_all_channels, run_pipeline
+def collect_now(channel: int | None = None) -> CollectJobOut:
+    """Ставит сбор в очередь; задачу разбирает бот-воркер (контейнер app)."""
+    chan_clause = (
+        CollectJob.channel_id.is_(None)
+        if channel is None
+        else CollectJob.channel_id == channel
+    )
+    with get_session() as session:
+        # не плодим дубли: если по этому проекту уже есть активная задача — вернём её
+        active = session.scalars(
+            select(CollectJob)
+            .where(
+                CollectJob.status.in_(
+                    [CollectJobStatus.queued, CollectJobStatus.running]
+                ),
+                chan_clause,
+            )
+            .order_by(CollectJob.created_at)
+        ).first()
+        if active:
+            return _job_out(active)
+        job = CollectJob(channel_id=channel, status=CollectJobStatus.queued)
+        session.add(job)
+        session.flush()
+        return _job_out(job)
 
-        with get_session() as session:
-            if channel is not None:
-                ch = get_channel(session, channel)
-                if ch:
-                    run_pipeline(session, OllamaClient(), ch)
-                    return
-            run_all_channels(session, OllamaClient())
 
-    await asyncio.to_thread(_run)
-    return {"ok": True}
+@app.get("/api/collect/status/{job_id}")
+def collect_status(job_id: int) -> CollectJobOut:
+    with get_session() as session:
+        job = session.get(CollectJob, job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail="not found")
+        return _job_out(job)
+
+
+@app.get("/api/collect/active")
+def collect_active() -> list[CollectJobOut]:
+    with get_session() as session:
+        jobs = session.scalars(
+            select(CollectJob)
+            .where(
+                CollectJob.status.in_(
+                    [CollectJobStatus.queued, CollectJobStatus.running]
+                )
+            )
+            .order_by(CollectJob.created_at)
+        ).all()
+        return [_job_out(j) for j in jobs]

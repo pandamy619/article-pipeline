@@ -55,6 +55,17 @@ export interface LastRun {
   drafted?: number;
 }
 
+export interface CollectJob {
+  id: number;
+  channel_id: number | null;
+  status: "queued" | "running" | "done" | "error";
+  result: Record<string, number> | null;
+  error: string | null;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+}
+
 export type Stats = Record<string, number>;
 
 export type ArticleAction = "draft" | "publish" | "reject";
