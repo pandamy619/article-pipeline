@@ -50,3 +50,23 @@ def test_dedup_within_batch(session):
     res = save_articles(session, [_art("https://e.com/1"), _art("https://e.com/1")])
     assert res.added == 1
     assert res.duplicates == 1
+
+
+def test_unique_race_counts_as_duplicate(session, monkeypatch):
+    # url уже в БД
+    assert save_articles(session, [_art("https://e.com/race")]).added == 1
+    session.commit()
+
+    # эмулируем гонку: пречек "не нашёл", хотя строка уже есть (как будто её
+    # вставил параллельный прогон между проверкой и flush)
+    import src.db.repo as repo
+
+    monkeypatch.setattr(repo, "_existing_id", lambda *a, **k: None)
+
+    # SAVEPOINT ловит UniqueViolation -> дубль, без падения всего прогона
+    res = save_articles(
+        session, [_art("https://e.com/race", title="другое", text="другое тело")]
+    )
+    assert res.added == 0
+    assert res.duplicates == 1
+    assert session.query(ArticleRecord).count() == 1

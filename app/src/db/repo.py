@@ -7,6 +7,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from src.collectors.base import Article
@@ -25,10 +26,25 @@ class SaveResult:
     duplicates: int
 
 
+def _existing_id(session: Session, url: str, content_hash_: str) -> int | None:
+    """id уже сохранённой статьи с таким URL или хешом контента, иначе None."""
+    return session.scalar(
+        select(ArticleRecord.id).where(
+            (ArticleRecord.url == url) | (ArticleRecord.content_hash == content_hash_)
+        )
+    )
+
+
 def save_articles(
     session: Session, articles: Iterable[Article], *, channel_id: int | None = None
 ) -> SaveResult:
-    """Сохраняет новые статьи, пропуская дубли по URL и по хешу контента."""
+    """Сохраняет новые статьи, пропуская дубли по URL и по хешу контента.
+
+    Вставка каждой статьи идёт в отдельном SAVEPOINT: если параллельный прогон
+    (плановый сбор + ручной запуск, либо два проекта с общей лентой) успел
+    вставить тот же url/hash между проверкой и flush, это считается дублем, а не
+    роняет весь прогон конфликтом уникального индекса.
+    """
     added = 0
     duplicates = 0
     seen_urls: set[str] = set()
@@ -39,32 +55,33 @@ def save_articles(
         if art.url in seen_urls or h in seen_hashes:
             duplicates += 1
             continue
-
-        exists = session.scalar(
-            select(ArticleRecord.id).where(
-                (ArticleRecord.url == art.url) | (ArticleRecord.content_hash == h)
-            )
-        )
         seen_urls.add(art.url)
         seen_hashes.add(h)
-        if exists:
+
+        if _existing_id(session, art.url, h) is not None:
             duplicates += 1
             continue
 
-        session.add(
-            ArticleRecord(
-                channel_id=channel_id,
-                url=art.url,
-                content_hash=h,
-                title=art.title,
-                text=art.text,
-                source=art.source,
-                published_at=art.published_at,
-                image_url=art.image_url,
-                status=ArticleStatus.new,
-            )
+        rec = ArticleRecord(
+            channel_id=channel_id,
+            url=art.url,
+            content_hash=h,
+            title=art.title,
+            text=art.text,
+            source=art.source,
+            published_at=art.published_at,
+            image_url=art.image_url,
+            status=ArticleStatus.new,
         )
+        try:
+            with session.begin_nested():
+                session.add(rec)
+                session.flush()
+        except IntegrityError:
+            # гонка по уникальному url/content_hash — статью уже сохранил
+            # параллельный прогон; SAVEPOINT откатился, считаем дублем
+            duplicates += 1
+            continue
         added += 1
 
-    session.flush()
     return SaveResult(added=added, duplicates=duplicates)
