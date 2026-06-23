@@ -296,15 +296,16 @@ async def run() -> None:
         while True:
             await asyncio.sleep(3600)
 
-    # ретрай: если Telegram временно недоступен, не роняем процесс, а пробуем снова
+    # ретрай: если Telegram/прокси недоступны, не роняем процесс, а пробуем снова
     dp = build_dispatcher()
     while True:
-        bots = [make_bot(t) for t in tokens]
+        bots: list[Bot] = []
         try:
+            bots = [make_bot(t) for t in tokens]
             await dp.start_polling(*bots)
             break
-        except Exception:  # noqa: BLE001 — сеть/Telegram недоступны: ждём и пробуем
-            log.exception("polling failed (Telegram unreachable?); retry in 30s")
+        except Exception:  # noqa: BLE001 — сеть/Telegram/прокси: ждём и пробуем
+            log.exception("polling failed (Telegram/proxy unreachable?); retry in 30s")
             await asyncio.sleep(30)
         finally:
             for b in bots:
