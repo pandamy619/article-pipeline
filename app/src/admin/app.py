@@ -568,12 +568,18 @@ async def search_api(body: SearchIn) -> dict[str, object]:
 
 
 @app.post("/api/collect")
-async def collect_now() -> dict[str, bool]:
+async def collect_now(channel: int | None = None) -> dict[str, bool]:
     def _run() -> None:
+        from src.channels.service import get_channel
         from src.llm.client import OllamaClient
-        from src.pipeline import run_all_channels
+        from src.pipeline import run_all_channels, run_pipeline
 
         with get_session() as session:
+            if channel is not None:
+                ch = get_channel(session, channel)
+                if ch:
+                    run_pipeline(session, OllamaClient(), ch)
+                    return
             run_all_channels(session, OllamaClient())
 
     await asyncio.to_thread(_run)

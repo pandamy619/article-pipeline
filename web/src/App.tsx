@@ -207,6 +207,8 @@ export default function App() {
   });
   const caret = (k: SortKey) =>
     sort.key === k ? (sort.dir === "asc" ? " ↑" : " ↓") : "";
+  const channelName = (id: number) =>
+    channels.find((c) => c.id === id)?.name || `проект #${id}`;
 
   return (
     <div className="shell">
@@ -269,7 +271,7 @@ export default function App() {
             className="btn btn-primary"
             disabled={busy}
             style={{ minWidth: 152 }}
-            onClick={() => run(() => collect())}
+            onClick={() => run(() => collect(currentChannel))}
           >
             {busy ? "Собираю…" : "Собрать сейчас"}
           </button>
@@ -298,15 +300,22 @@ export default function App() {
           {lastRun?.exists && <LastRunLine run={lastRun} />}
 
           <div className="metrics">
-            <div className="metric">
+            <button
+              className={`metric${filter === "" ? " on" : ""}`}
+              onClick={() => setFilter("")}
+            >
               <div className="v">{stats.total ?? 0}</div>
               <div className="k">всего</div>
-            </div>
+            </button>
             {(["new", "drafted", "scheduled", "published"] as const).map((k) => (
-              <div className="metric" key={k}>
+              <button
+                key={k}
+                className={`metric${filter === k ? " on" : ""}`}
+                onClick={() => setFilter(k)}
+              >
                 <div className="v">{stats[k] ?? 0}</div>
                 <div className="k">{STATUS_RU[k]}</div>
-              </div>
+              </button>
             ))}
           </div>
 
@@ -463,6 +472,9 @@ export default function App() {
                       <div className="reason">
                         в очереди на {new Date(a.scheduled_at).toLocaleString()}
                       </div>
+                    )}
+                    {currentChannel === null && a.channel_id != null && (
+                      <div className="reason">проект: {channelName(a.channel_id)}</div>
                     )}
                   </td>
                   <td className="muted">{a.source}</td>

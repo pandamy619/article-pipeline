@@ -134,8 +134,9 @@ export async function setArticleStatus(id: number, status: string): Promise<void
   }
 }
 
-export async function collect(): Promise<void> {
-  const r = await req("/api/collect", { method: "POST" });
+export async function collect(channel?: number | null): Promise<void> {
+  const q = channel != null ? `?channel=${channel}` : "";
+  const r = await req(`/api/collect${q}`, { method: "POST" });
   if (!r.ok) throw new Error(`collect: HTTP ${r.status}`);
 }
 
