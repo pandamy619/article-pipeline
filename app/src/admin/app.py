@@ -245,12 +245,12 @@ async def publish_article(article_id: int) -> dict[str, bool]:
 
 class BulkIn(BaseModel):
     ids: list[int]
-    action: str  # reject | queue | unqueue | publish
+    action: str  # reject | approve | queue | unqueue | publish
 
 
 @app.post("/api/articles/bulk")
 async def bulk_action(body: BulkIn) -> dict[str, object]:
-    if body.action in {"reject", "queue", "unqueue"}:
+    if body.action in {"reject", "approve", "queue", "unqueue"}:
         done = 0
         with get_session() as session:
             for aid in body.ids:
@@ -259,11 +259,17 @@ async def bulk_action(body: BulkIn) -> dict[str, object]:
                     if rec and rec.status != ArticleStatus.published:
                         rec.status = ArticleStatus.rejected
                         done += 1
+                elif body.action == "approve":
+                    rec = session.get(ArticleRecord, aid)
+                    if rec:
+                        rec.review = False  # одобрить веб-находку -> в общую таблицу
+                        done += 1
                 elif body.action == "queue":
                     if schedule_article(session, aid):
                         done += 1
-                elif unschedule(session, aid):
-                    done += 1
+                elif body.action == "unqueue":
+                    if unschedule(session, aid):
+                        done += 1
         return {"ok": True, "done": done}
 
     if body.action == "publish":

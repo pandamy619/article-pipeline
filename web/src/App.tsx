@@ -1007,14 +1007,22 @@ function SearchPanel({
   channel: number | null;
   onChanged: () => void;
 }) {
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(
+    () => localStorage.getItem("search_query") ?? "",
+  );
   const [busy, setBusy] = useState(false);
   const [webJob, setWebJob] = useState<CollectJob | null>(null);
   const [pending, setPending] = useState<Article[]>([]);
   const [actId, setActId] = useState<number | null>(null);
+  const [sel, setSel] = useState<Set<number>>(new Set());
 
   const webActive =
     webJob?.status === "queued" || webJob?.status === "running";
+
+  function setQueryPersist(v: string) {
+    setQuery(v);
+    localStorage.setItem("search_query", v);
+  }
 
   async function loadPending() {
     try {
@@ -1024,10 +1032,21 @@ function SearchPanel({
     }
   }
 
-  // кандидаты на одобрение — при открытии и смене проекта
+  // подборка-черновики — при открытии и смене проекта
   useEffect(() => {
     loadPending();
+    setSel(new Set());
   }, [channel]);
+
+  // переподключаемся к уже идущему веб-поиску (после ухода со страницы/перезагрузки)
+  useEffect(() => {
+    collectActive()
+      .then((jobs) => {
+        const web = jobs.find((j) => j.query != null);
+        if (web) setWebJob(web);
+      })
+      .catch(() => {});
+  }, []);
 
   async function runWeb() {
     const q = query.trim();
@@ -1071,6 +1090,11 @@ function SearchPanel({
       if (action === "approve") await approveArticle(id);
       else await runAction(id, "reject");
       setPending((p) => p.filter((a) => a.id !== id));
+      setSel((prev) => {
+        const n = new Set(prev);
+        n.delete(id);
+        return n;
+      });
       onChanged(); // одобренная появится в общей таблице
     } catch (e) {
       alert(`Ошибка: ${e instanceof Error ? e.message : String(e)}`);
@@ -1079,12 +1103,34 @@ function SearchPanel({
     }
   }
 
+  function toggleSel(id: number) {
+    setSel((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  }
+
+  async function bulk(action: "approve" | "reject") {
+    const ids = [...sel];
+    if (!ids.length) return;
+    try {
+      await bulkAction(ids, action);
+      setSel(new Set());
+      await loadPending();
+      onChanged();
+    } catch (e) {
+      alert(`Ошибка: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
   return (
     <div className="card" style={{ padding: "14px 16px", marginBottom: 16 }}>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <input
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => setQueryPersist(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && query.trim() && !webActive) runWeb();
           }}
@@ -1128,14 +1174,51 @@ function SearchPanel({
 
       <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>
         «Найти в вебе» — LLM придумает запросы, SearXNG принесёт новые статьи. Они
-        попадают сюда на одобрение: «одобрить» добавит статью в общую таблицу,
-        «отклонить» уберёт из предложений.
+        сохраняются здесь как подборка-черновики (не пропадут при перезагрузке):
+        «в Статьи» переносит в общую таблицу с оценкой LLM, «удалить» убирает из
+        подборки. Можно отметить несколько и действовать пачкой.
       </div>
 
       {pending.length > 0 && (
         <div style={{ marginTop: 14 }}>
-          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 8 }}>
-            Предложено к одобрению ({pending.length})
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              marginBottom: 8,
+              flexWrap: "wrap",
+            }}
+          >
+            <label
+              style={{ display: "flex", alignItems: "center", gap: 6 }}
+              title="выделить все"
+            >
+              <input
+                type="checkbox"
+                checked={pending.length > 0 && sel.size === pending.length}
+                onChange={(e) =>
+                  setSel(
+                    e.target.checked
+                      ? new Set(pending.map((a) => a.id))
+                      : new Set(),
+                  )
+                }
+              />
+              <span style={{ fontWeight: 600, fontSize: 14 }}>
+                Подборка-черновики ({pending.length})
+              </span>
+            </label>
+            {sel.size > 0 && (
+              <>
+                <button className="btn btn-primary" onClick={() => bulk("approve")}>
+                  Перенести в Статьи ({sel.size})
+                </button>
+                <button className="btn" onClick={() => bulk("reject")}>
+                  Удалить ({sel.size})
+                </button>
+              </>
+            )}
           </div>
           {pending.map((a) => (
             <div
@@ -1156,33 +1239,43 @@ function SearchPanel({
                   flexWrap: "wrap",
                 }}
               >
-                <a
-                  className="title"
-                  href={a.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{ fontWeight: 600 }}
-                >
-                  {a.title}
-                </a>
+                <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
+                  <input
+                    type="checkbox"
+                    checked={sel.has(a.id)}
+                    onChange={() => toggleSel(a.id)}
+                  />
+                  <a
+                    className="title"
+                    href={a.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ fontWeight: 600 }}
+                  >
+                    {a.title}
+                  </a>
+                </div>
                 <div style={{ display: "flex", gap: 12, whiteSpace: "nowrap" }}>
                   <button
                     className="alink"
                     disabled={actId === a.id}
                     onClick={() => decide(a.id, "approve")}
                   >
-                    одобрить
+                    в Статьи
                   </button>
                   <button
                     className="alink"
                     disabled={actId === a.id}
                     onClick={() => decide(a.id, "reject")}
                   >
-                    отклонить
+                    удалить
                   </button>
                 </div>
               </div>
-              <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
+              <div
+                className="muted"
+                style={{ fontSize: 12, marginTop: 2, marginLeft: 22 }}
+              >
                 {a.source}
                 {a.relevance_score != null ? ` · оценка ${a.relevance_score}` : ""}
               </div>
@@ -1191,6 +1284,7 @@ function SearchPanel({
                   style={{
                     fontSize: 13,
                     marginTop: 6,
+                    marginLeft: 22,
                     whiteSpace: "pre-wrap",
                     maxHeight: 120,
                     overflow: "auto",

@@ -322,6 +322,26 @@ def test_web_candidate_hidden_until_approved(client):
     )
 
 
+def test_bulk_approve_moves_web_candidates(client):
+    _add_web_candidate("К1", "https://web.com/c1", "wc1")
+    _add_web_candidate("К2", "https://web.com/c2", "wc2")
+    pend = client.get("/api/search/pending").json()
+    ids = [p["id"] for p in pend if p["title"] in ("К1", "К2")]
+    assert len(ids) == 2
+
+    r = client.post(
+        "/api/articles/bulk", json={"ids": ids, "action": "approve"}
+    ).json()
+    assert r["done"] == 2
+
+    titles = {a["title"] for a in client.get("/api/articles").json()}
+    assert {"К1", "К2"} <= titles  # переехали в общую таблицу
+    assert all(
+        p["title"] not in ("К1", "К2")
+        for p in client.get("/api/search/pending").json()
+    )
+
+
 def test_web_candidate_reject_stays_hidden(client):
     _add_web_candidate("Отклоню", "https://web.com/b", "wh2")
     pend = client.get("/api/search/pending").json()
