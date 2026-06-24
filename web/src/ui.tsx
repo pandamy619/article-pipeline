@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useRef, useState } from "react";
 
 type Kind = "error" | "info" | "success";
 type ToastItem = { id: number; msg: string; kind: Kind };
@@ -29,22 +29,18 @@ export function confirmDialog(
 export function UiHost() {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [pending, setPending] = useState<Pending | null>(null);
+  const seq = useRef(1);
 
-  useEffect(() => {
-    let seq = 1;
-    pushToast = (msg, kind) => {
-      const id = seq++;
-      setToasts((t) => [...t, { id, msg, kind }]);
-      const ttl = kind === "error" ? 9000 : 5000;
-      setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), ttl);
-    };
-    openConfirm = (p) =>
-      new Promise<boolean>((resolve) => setPending({ ...p, resolve }));
-    return () => {
-      pushToast = null;
-      openConfirm = null;
-    };
-  }, []);
+  // регистрируем мост сразу при рендере (не в useEffect) — чтобы к первому клику
+  // toast/confirmDialog точно работали и не было отката на нативный confirm
+  pushToast = (msg, kind) => {
+    const id = seq.current++;
+    setToasts((t) => [...t, { id, msg, kind }]);
+    const ttl = kind === "error" ? 9000 : 5000;
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), ttl);
+  };
+  openConfirm = (p) =>
+    new Promise<boolean>((resolve) => setPending({ ...p, resolve }));
 
   function decide(v: boolean) {
     pending?.resolve(v);
