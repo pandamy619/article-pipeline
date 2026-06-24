@@ -217,7 +217,9 @@ async def draft_article(article_id: int) -> dict[str, bool]:
 
 
 @app.post("/api/articles/{article_id}/publish")
-async def publish_article(article_id: int) -> dict[str, bool]:
+async def publish_article(article_id: int) -> dict[str, object]:
+    from aiogram.exceptions import TelegramBadRequest
+
     from src.bot_factory import make_bot
     from src.publisher.telegram import publish
 
@@ -227,11 +229,20 @@ async def publish_article(article_id: int) -> dict[str, bool]:
         image = rec.image_url if rec else None
         token, chat = _publish_target(session, rec.channel_id if rec else None)
     if not post:
-        return {"ok": False}
+        return {"ok": False, "error": "у статьи нет поста"}
 
     bot = make_bot(token)
     try:
         message_id = await publish(bot, chat, post, image_url=image)
+    except TelegramBadRequest as exc:
+        # неверный channel_id / бот не админ канала и т.п. — не роняем 500-кой
+        return {
+            "ok": False,
+            "error": f"Telegram отклонил публикацию в {chat!r}: {exc}. Проверь "
+            "channel_id проекта и что бот добавлен в канал админом с правом постинга.",
+        }
+    except Exception as exc:  # noqa: BLE001 — отдаём причину, а не 500
+        return {"ok": False, "error": f"ошибка публикации: {exc}"}
     finally:
         await bot.session.close()
 

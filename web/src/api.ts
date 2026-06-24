@@ -104,7 +104,9 @@ export async function runAction(id: number, what: ArticleAction): Promise<void> 
   if (!r.ok) throw new Error(`${what}: HTTP ${r.status}`);
   const data = await r.json().catch(() => ({}));
   if (data && data.ok === false) {
-    throw new Error(`${what}: сервер отклонил запрос (нет поста или ошибка модели)`);
+    throw new Error(
+      data.error || `${what}: сервер отклонил запрос (нет поста или ошибка модели)`,
+    );
   }
 }
 

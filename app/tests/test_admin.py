@@ -355,6 +355,38 @@ def test_web_candidate_reject_stays_hidden(client):
     assert all(a["title"] != "Отклоню" for a in client.get("/api/articles").json())
 
 
+def test_publish_bad_chat_returns_error_not_500(client, monkeypatch):
+    from aiogram.exceptions import TelegramBadRequest
+
+    import src.bot_factory as bf
+    import src.publisher.telegram as tg
+
+    s = db_base.SessionLocal()
+    s.get(ArticleRecord, 1).post_text = "пост"
+    s.commit()
+    s.close()
+
+    class _Sess:
+        async def close(self):
+            pass
+
+    class _Bot:
+        session = _Sess()
+
+    monkeypatch.setattr(bf, "make_bot", lambda token: _Bot())
+
+    async def _raise(*a, **k):
+        raise TelegramBadRequest(method=None, message="chat not found")
+
+    monkeypatch.setattr(tg, "publish", _raise)
+
+    r = client.post("/api/articles/1/publish")
+    assert r.status_code == 200  # не 500
+    data = r.json()
+    assert data["ok"] is False
+    assert "chat not found" in data["error"]
+
+
 def test_chat(client, monkeypatch):
     import src.llm.client as llm
 
