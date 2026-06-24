@@ -101,6 +101,18 @@ async def send_drafts_all() -> int:
     return sent
 
 
+@router.message(Command("start", "id"))
+async def cmd_id(message: Message) -> None:
+    """Показывает Telegram-id чата — чтобы вписать его в ADMIN_USER_ID (личка)."""
+    uid = message.from_user.id if message.from_user else message.chat.id
+    await message.answer(
+        f"Ваш Telegram ID: {uid}\n\n"
+        "Впишите его в ADMIN_USER_ID (или в поле «Admin user id» проекта) — тогда "
+        "бот будет слать черновики на модерацию и уведомления сюда, в личку, а не в "
+        "канал. Это должно быть положительное число (личный id), а не id канала."
+    )
+
+
 @router.message(Command("review"))
 async def cmd_review(message: Message) -> None:
     if message.from_user and message.from_user.id != _admin_id():
