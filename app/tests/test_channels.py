@@ -25,6 +25,17 @@ def test_update_ignores_unknown(session):
     assert ch.get_channel(session, c.id).topic == "new"
 
 
+def test_strips_whitespace_in_telegram_fields(session):
+    # вставленный с пробелом/переносом channel_id ломает Telegram — обрезаем
+    c = ch.create_channel(
+        session, name="A", channel_id="  -1003980386609\n", bot_token=" 12:abc "
+    )
+    assert c.channel_id == "-1003980386609"
+    assert c.bot_token == "12:abc"
+    ch.update_channel(session, c.id, channel_id="\t@chan ")
+    assert ch.get_channel(session, c.id).channel_id == "@chan"
+
+
 def test_delete_detaches_articles(session):
     c = ch.create_channel(session, name="A")
     a = _article(session, "u1")

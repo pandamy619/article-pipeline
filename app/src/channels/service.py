@@ -34,8 +34,19 @@ def split(raw: str) -> list[str]:
     return Settings._split(raw or "")
 
 
+# поля, где затесавшийся пробел/перенос ломает обращения к Telegram
+_STRIP_FIELDS = {"name", "bot_token", "channel_id", "admin_user_id"}
+
+
 def _clean(fields: dict) -> dict:
-    return {k: v for k, v in fields.items() if k in FIELDS}
+    out: dict = {}
+    for k, v in fields.items():
+        if k not in FIELDS:
+            continue
+        if k in _STRIP_FIELDS and isinstance(v, str):
+            v = v.strip()
+        out[k] = v
+    return out
 
 
 def list_channels(session: Session) -> Sequence[Channel]:
@@ -53,8 +64,10 @@ def create_channel(session: Session, **fields) -> Channel:
     return ch
 
 
-def update_channel(session: Session, channel_id: int, **fields) -> Channel | None:
-    ch = session.get(Channel, channel_id)
+def update_channel(session: Session, cid: int, **fields) -> Channel | None:
+    # ВАЖНО: параметр назван cid, а не channel_id — иначе он бы конфликтовал с
+    # полем channel_id (Telegram-чат) в **fields и ронял обновление TypeError'ом
+    ch = session.get(Channel, cid)
     if not ch:
         return None
     for key, value in _clean(fields).items():

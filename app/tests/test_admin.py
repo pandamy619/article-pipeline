@@ -218,6 +218,20 @@ def test_channels_crud(client):
     assert len(client.get("/api/channels").json()) == 1
 
 
+def test_update_channel_id_via_put(client):
+    # фронт шлёт всю форму, включая channel_id — раньше это роняло 500 (TypeError)
+    c = client.post(
+        "/api/channels", json={"name": "P", "channel_id": "-100111"}
+    ).json()
+    cid = c["id"]
+    r = client.put(
+        f"/api/channels/{cid}",
+        json={"name": "P", "channel_id": "  -1003980386609 "},
+    )
+    assert r.status_code == 200
+    assert r.json()["channel_id"] == "-1003980386609"  # сохранён и обрезан
+
+
 def test_articles_scoped_by_channel(client):
     chs = client.get("/api/channels").json()  # ensure default + привяжет сироту
     default_id = chs[0]["id"]
