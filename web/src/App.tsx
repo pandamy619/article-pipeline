@@ -381,26 +381,6 @@ export default function App() {
         <>
           {lastRun?.exists && <LastRunLine run={lastRun} />}
 
-          <div className="metrics">
-            <button
-              className={`metric${filter === "" ? " on" : ""}`}
-              onClick={() => setFilter("")}
-            >
-              <div className="v">{stats.total ?? 0}</div>
-              <div className="k">всего</div>
-            </button>
-            {(["new", "drafted", "scheduled", "published"] as const).map((k) => (
-              <button
-                key={k}
-                className={`metric${filter === k ? " on" : ""}`}
-                onClick={() => setFilter(k)}
-              >
-                <div className="v">{stats[k] ?? 0}</div>
-                <div className="k">{STATUS_RU[k]}</div>
-              </button>
-            ))}
-          </div>
-
           {selected.size > 0 && (
         <div
           className="card"
