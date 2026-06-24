@@ -118,6 +118,61 @@ def test_drain_runs_web_search(memdb, monkeypatch):
     s.close()
 
 
+def test_publish_due_unschedules_on_bad_request(memdb, monkeypatch):
+    from datetime import datetime, timezone
+
+    from aiogram.exceptions import TelegramBadRequest
+
+    import src.moderation.bot as bot
+    from src.db.models import ArticleRecord, ArticleStatus
+
+    s = memdb()
+    s.add(
+        ArticleRecord(
+            url="https://e.com/p",
+            content_hash="ph",
+            title="t",
+            text="x",
+            source="s",
+            status=ArticleStatus.scheduled,
+            post_text="пост",
+            scheduled_at=datetime(2020, 1, 1, tzinfo=timezone.utc),
+        )
+    )
+    s.commit()
+    s.close()
+
+    class _Sess:
+        async def close(self):
+            pass
+
+    class _Bot:
+        session = _Sess()
+
+    monkeypatch.setattr(bot, "make_bot", lambda token: _Bot())
+
+    async def _raise(*a, **k):
+        raise TelegramBadRequest(method=None, message="chat not found")
+
+    monkeypatch.setattr(bot, "publish", _raise)
+
+    notified: dict[str, str] = {}
+
+    async def _notify(text: str) -> None:
+        notified["text"] = text
+
+    monkeypatch.setattr(bot, "_notify_admin", _notify)
+
+    asyncio.run(bot._publish_due())
+
+    s = memdb()
+    rec = s.query(ArticleRecord).first()
+    assert rec.status == ArticleStatus.drafted  # снят с очереди
+    assert rec.scheduled_at is None
+    s.close()
+    assert "chat not found" in notified["text"]
+
+
 def test_drain_noop_when_empty(memdb, monkeypatch):
     import src.moderation.bot as bot
 

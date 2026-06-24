@@ -8,6 +8,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from aiogram import Bot, Dispatcher, F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandObject
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -406,7 +407,7 @@ async def _drain_collect_jobs() -> None:
 async def _publish_due() -> None:
     """Публикует статьи из очереди, у которых подошло время (через бот канала)."""
     from src.channels.service import get_channel
-    from src.publisher.queue import due_article_ids
+    from src.publisher.queue import due_article_ids, unschedule
 
     with get_session() as session:
         ids = due_article_ids(session)
@@ -429,7 +430,19 @@ async def _publish_due() -> None:
         pub_bot = make_bot(token)
         try:
             mid = await publish(pub_bot, chat, post, image_url=image)
-        except Exception:  # noqa: BLE001 — одна статья не должна ронять остальные
+        except TelegramBadRequest as exc:
+            # постоянная ошибка (chat not found / бот не админ и т.п.): снимаем с
+            # очереди, чтобы не долбиться каждую минуту, и уведомляем админа
+            log.error("publish rejected for article %s -> chat %r: %s", aid, chat, exc)
+            with get_session() as session:
+                unschedule(session, aid)
+            await _notify_admin(
+                f"⚠️ Не опубликовать статью #{aid} в чат {chat!r}: {exc}\n"
+                "Снял с очереди. Проверь: channel_id проекта (формат @имя или "
+                "-100…) и что бот добавлен в этот канал админом с правом постинга."
+            )
+            continue
+        except Exception:  # noqa: BLE001 — прочие (сеть и т.п.): попробуем позже
             log.exception("scheduled publish failed for article %s", aid)
             continue
         finally:
