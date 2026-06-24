@@ -30,7 +30,11 @@ def parse_callback(data: str) -> tuple[str, int] | None:
 def get_drafts(
     session: Session, *, channel_id: int | None = None, limit: int | None = None
 ) -> Sequence[ArticleRecord]:
-    stmt = select(ArticleRecord).where(ArticleRecord.status == ArticleStatus.drafted)
+    # review=True — веб-находки на одобрении в админке, в бота их не шлём
+    stmt = select(ArticleRecord).where(
+        ArticleRecord.status == ArticleStatus.drafted,
+        ArticleRecord.review.is_(False),
+    )
     if channel_id is not None:
         stmt = stmt.where(ArticleRecord.channel_id == channel_id)
     if limit:

@@ -394,7 +394,11 @@ async def _drain_collect_jobs() -> None:
 
     if error is None:
         log.info("collect job %s done: %s", job_id, summary)
-        if channel_id is not None:
+        # веб-поиск — кандидаты ждут одобрения в админке, бота не трогаем
+        is_web = summary is not None and "queries" in summary
+        if is_web:
+            pass
+        elif channel_id is not None:
             await _send_drafts_for(channel_id)
         else:
             await send_drafts_all()

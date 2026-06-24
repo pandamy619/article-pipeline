@@ -92,7 +92,10 @@ def test_drain_runs_web_search(memdb, monkeypatch):
         lambda session, client, query, *, channel_id=None: (2, ["q1", "q2"]),
     )
 
+    sent = {"n": 0}
+
     async def _noop() -> int:
+        sent["n"] += 1
         return 0
 
     monkeypatch.setattr(bot, "send_drafts_all", _noop)
@@ -116,6 +119,8 @@ def test_drain_runs_web_search(memdb, monkeypatch):
     assert '"added": 2' in (job.result or "")
     assert "q1" in (job.result or "")
     s.close()
+    # веб-поиск не должен слать кандидатов в бота
+    assert sent["n"] == 0
 
 
 def test_publish_due_unschedules_on_bad_request(memdb, monkeypatch):

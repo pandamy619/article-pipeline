@@ -21,6 +21,14 @@ def test_get_drafts_and_mark_pending(session):
     assert len(service.get_drafts(session)) == 0
 
 
+def test_get_drafts_excludes_review(session):
+    # веб-находка (review=True) не должна попадать в рассылку бота
+    aid = _make_draft(session, url="web1")
+    session.get(ArticleRecord, aid).review = True
+    session.flush()
+    assert len(service.get_drafts(session)) == 0
+
+
 def test_reject(session):
     aid = _make_draft(session)
     service.reject(session, aid)
