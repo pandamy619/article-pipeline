@@ -77,7 +77,8 @@ def web_search_collect(
         channel_id = ensure_default_channel(session).id
     queries = generate_queries(client, description)
     articles = collect_websearch(queries)
-    saved = save_articles(session, articles, channel_id=channel_id)
+    # помечаем review=True: попадут в панель поиска на одобрение, а не в общую таблицу
+    saved = save_articles(session, articles, channel_id=channel_id, review=True)
     ch = get_channel(session, channel_id)
     apply_relevance_filter(
         session,

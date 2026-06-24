@@ -106,7 +106,10 @@ def _to_out(rec: ArticleRecord) -> ArticleOut:
 @app.get("/api/stats")
 def stats(channel: int | None = None) -> dict[str, int]:
     with get_session() as session:
-        stmt = select(ArticleRecord.status, func.count())
+        # review=True — веб-кандидаты на одобрении, в общую статистику не считаем
+        stmt = select(ArticleRecord.status, func.count()).where(
+            ArticleRecord.review.is_(False)
+        )
         if channel is not None:
             stmt = stmt.where(ArticleRecord.channel_id == channel)
         rows = session.execute(stmt.group_by(ArticleRecord.status)).all()
@@ -122,7 +125,12 @@ def list_articles(
     status: str | None = None, channel: int | None = None, limit: int = 200
 ) -> list[ArticleOut]:
     with get_session() as session:
-        stmt = select(ArticleRecord).order_by(ArticleRecord.id.desc())
+        # review=True скрыты — это веб-находки, ждущие одобрения в панели поиска
+        stmt = (
+            select(ArticleRecord)
+            .where(ArticleRecord.review.is_(False))
+            .order_by(ArticleRecord.id.desc())
+        )
         if status:
             stmt = stmt.where(ArticleRecord.status == ArticleStatus(status))
         if channel is not None:
@@ -136,6 +144,16 @@ def reject_article(article_id: int) -> dict[str, bool]:
         rec = session.get(ArticleRecord, article_id)
         if rec:
             rec.status = ArticleStatus.rejected
+    return {"ok": True}
+
+
+@app.post("/api/articles/{article_id}/approve")
+def approve_article(article_id: int) -> dict[str, bool]:
+    """Одобрить веб-находку: снимаем review -> статья появляется в общей таблице."""
+    with get_session() as session:
+        rec = session.get(ArticleRecord, article_id)
+        if rec:
+            rec.review = False
     return {"ok": True}
 
 
@@ -600,6 +618,23 @@ async def search_api(body: SearchIn) -> dict[str, object]:
             }
 
     return await asyncio.to_thread(_sem)
+
+
+@app.get("/api/search/pending")
+def search_pending(channel: int | None = None) -> list[ArticleOut]:
+    """Веб-находки, ждущие одобрения (review=True), кроме отклонённых."""
+    with get_session() as session:
+        stmt = (
+            select(ArticleRecord)
+            .where(
+                ArticleRecord.review.is_(True),
+                ArticleRecord.status != ArticleStatus.rejected,
+            )
+            .order_by(ArticleRecord.id.desc())
+        )
+        if channel is not None:
+            stmt = stmt.where(ArticleRecord.channel_id == channel)
+        return [_to_out(r) for r in session.scalars(stmt.limit(100)).all()]
 
 
 class CollectJobOut(BaseModel):

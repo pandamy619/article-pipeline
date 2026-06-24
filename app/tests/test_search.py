@@ -87,3 +87,5 @@ def test_web_search_collect(session, monkeypatch):
     rec = session.query(ArticleRecord).filter_by(url="https://e.com/x").first()
     assert rec.status == ArticleStatus.drafted
     assert rec.channel_id == ch.id
+    # веб-находка помечена review=True — ждёт одобрения, не в общей таблице
+    assert rec.review is True

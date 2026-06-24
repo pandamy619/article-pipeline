@@ -288,6 +288,53 @@ def test_search_web_enqueues_job(client):
     assert again["job"]["id"] == r["job"]["id"]
 
 
+def _add_web_candidate(title, url, h):
+    s = db_base.SessionLocal()
+    s.add(
+        ArticleRecord(
+            url=url,
+            content_hash=h,
+            title=title,
+            text="t",
+            source="Веб-поиск",
+            status=ArticleStatus.drafted,
+            post_text="пост",
+            review=True,
+        )
+    )
+    s.commit()
+    s.close()
+
+
+def test_web_candidate_hidden_until_approved(client):
+    _add_web_candidate("Веб находка", "https://web.com/a", "wh1")
+
+    # в общей таблице её нет, в pending — есть
+    assert all(a["title"] != "Веб находка" for a in client.get("/api/articles").json())
+    pend = client.get("/api/search/pending").json()
+    cand = next(p for p in pend if p["title"] == "Веб находка")
+
+    # одобряем -> появляется в общей таблице и уходит из pending
+    assert client.post(f"/api/articles/{cand['id']}/approve").json() == {"ok": True}
+    assert any(a["title"] == "Веб находка" for a in client.get("/api/articles").json())
+    assert all(
+        p["title"] != "Веб находка" for p in client.get("/api/search/pending").json()
+    )
+
+
+def test_web_candidate_reject_stays_hidden(client):
+    _add_web_candidate("Отклоню", "https://web.com/b", "wh2")
+    pend = client.get("/api/search/pending").json()
+    cand = next(p for p in pend if p["title"] == "Отклоню")
+
+    assert client.post(f"/api/articles/{cand['id']}/reject").json() == {"ok": True}
+    # ни в pending (rejected), ни в общей таблице (review=True)
+    assert all(
+        p["title"] != "Отклоню" for p in client.get("/api/search/pending").json()
+    )
+    assert all(a["title"] != "Отклоню" for a in client.get("/api/articles").json())
+
+
 def test_chat(client, monkeypatch):
     import src.llm.client as llm
 

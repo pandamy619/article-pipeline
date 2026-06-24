@@ -1,6 +1,7 @@
 import { type CSSProperties, Fragment, useEffect, useState } from "react";
 import {
   addFeed,
+  approveArticle,
   AuthError,
   bulkAction,
   type ChatMsg,
@@ -17,6 +18,7 @@ import {
   fetchChannels,
   fetchFeeds,
   fetchLastRun,
+  fetchPendingWeb,
   fetchSettings,
   fetchStats,
   getToken,
@@ -24,7 +26,6 @@ import {
   savePost,
   saveSetting,
   scheduleArticle,
-  type SearchResponse,
   searchArticles,
   setArticleStatus,
   setToken,
@@ -346,14 +347,16 @@ export default function App() {
               </span>
             )}
           </div>
-          <button
-            className="btn btn-primary"
-            disabled={busy || collecting}
-            style={{ minWidth: 152 }}
-            onClick={startCollect}
-          >
-            {collecting ? "Собираю…" : "Собрать сейчас"}
-          </button>
+          {view !== "search" && (
+            <button
+              className="btn btn-primary"
+              disabled={busy || collecting}
+              style={{ minWidth: 152 }}
+              onClick={startCollect}
+            >
+              {collecting ? "Собираю…" : "Собрать сейчас"}
+            </button>
+          )}
         </header>
 
       {view === "feeds" && <FeedsPanel />}
@@ -1026,22 +1029,34 @@ function SearchPanel({
 }) {
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
-  const [res, setRes] = useState<SearchResponse | null>(null);
   const [webJob, setWebJob] = useState<CollectJob | null>(null);
+  const [pending, setPending] = useState<Article[]>([]);
+  const [actId, setActId] = useState<number | null>(null);
 
   const webActive =
     webJob?.status === "queued" || webJob?.status === "running";
 
-  async function go(mode: "semantic" | "web") {
+  async function loadPending() {
+    try {
+      setPending(await fetchPendingWeb(channel));
+    } catch {
+      /* при ошибке оставляем как есть */
+    }
+  }
+
+  // кандидаты на одобрение — при открытии и смене проекта
+  useEffect(() => {
+    loadPending();
+  }, [channel]);
+
+  async function runWeb() {
     const q = query.trim();
     if (!q) return;
     setBusy(true);
-    setRes(null);
-    if (mode === "web") setWebJob(null);
+    setWebJob(null);
     try {
-      const r = await searchArticles(q, mode, channel);
-      if (mode === "web") setWebJob(r.job ?? null);
-      else setRes(r);
+      const r = await searchArticles(q, "web", channel);
+      setWebJob(r.job ?? null);
     } catch (e) {
       alert(`Ошибка: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
@@ -1049,7 +1064,7 @@ function SearchPanel({
     }
   }
 
-  // веб-поиск исполняет воркер — опрашиваем задачу, пока не завершится
+  // веб-поиск исполняет воркер — опрашиваем задачу, по готовности грузим кандидатов
   useEffect(() => {
     if (!webJob || !webActive) return;
     const jobId = webJob.id;
@@ -1059,7 +1074,7 @@ function SearchPanel({
         const j = await collectStatus(jobId);
         if (stop) return;
         setWebJob(j);
-        if (j.status === "done") onChanged();
+        if (j.status === "done") loadPending();
       } catch {
         /* разовые ошибки опроса игнорируем */
       }
@@ -1070,6 +1085,20 @@ function SearchPanel({
     };
   }, [webJob?.id, webActive]);
 
+  async function decide(id: number, action: "approve" | "reject") {
+    setActId(id);
+    try {
+      if (action === "approve") await approveArticle(id);
+      else await runAction(id, "reject");
+      setPending((p) => p.filter((a) => a.id !== id));
+      onChanged(); // одобренная появится в общей таблице
+    } catch (e) {
+      alert(`Ошибка: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setActId(null);
+    }
+  }
+
   return (
     <div className="card" style={{ padding: "14px 16px", marginBottom: 16 }}>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -1077,7 +1106,7 @@ function SearchPanel({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && query.trim()) go("semantic");
+            if (e.key === "Enter" && query.trim() && !webActive) runWeb();
           }}
           placeholder="опиши, что искать (напр. туториалы по асинхронному python)"
           style={{
@@ -1091,77 +1120,109 @@ function SearchPanel({
           }}
         />
         <button
-          className="btn"
-          disabled={busy || !query.trim()}
-          onClick={() => go("semantic")}
-        >
-          По собранным
-        </button>
-        <button
           className="btn btn-primary"
           disabled={busy || webActive || !query.trim()}
-          onClick={() => go("web")}
+          onClick={runWeb}
         >
           {webActive ? "Ищу…" : "Найти в вебе"}
         </button>
       </div>
 
-      {busy && (
-        <div className="muted" style={{ fontSize: 12, marginTop: 10 }}>
-          ищу…
-        </div>
-      )}
-
       {webJob && (
         <div
-          className="muted"
           style={{
             fontSize: 13,
             marginTop: 10,
-            color: webJob.status === "error" ? "#c02626" : undefined,
+            color: webJob.status === "error" ? "#c02626" : "var(--muted)",
           }}
         >
           {webActive
             ? "идёт веб-поиск… (LLM придумывает запросы, SearXNG тянет статьи — до минуты)"
             : webJob.status === "error"
               ? `веб-поиск упал: ${webJob.error ?? ""}`
-              : `Добавлено новых: ${webJob.result?.added ?? 0}. Запросы: ${(
+              : `Найдено и предложено: ${webJob.result?.added ?? 0}. Запросы: ${(
                   (webJob.result?.queries as string[] | undefined) ?? []
-                ).join(", ")}. Появятся в списке как черновики текущего проекта.`}
+                ).join(", ")}.`}
         </div>
       )}
 
-      {res?.mode === "semantic" &&
-        ((res.results ?? []).length === 0 ? (
-          <div className="muted" style={{ fontSize: 13, marginTop: 10 }}>
-            Ничего похожего (нужны статьи с эмбеддингами — собери и прогони дедуп).
-          </div>
-        ) : (
-          <table className="tbl" style={{ marginTop: 10 }}>
-            <tbody>
-              {(res.results ?? []).map((r) => (
-                <tr className="row" key={r.id}>
-                  <td className="score" style={{ width: 52 }}>
-                    {r.similarity.toFixed(2)}
-                  </td>
-                  <td>
-                    <a className="title" href={r.url} target="_blank" rel="noreferrer">
-                      {r.title}
-                    </a>
-                  </td>
-                  <td className="muted" style={{ width: 130 }}>
-                    {STATUS_RU[r.status] ?? r.status}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ))}
-
       <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>
-        «По собранным» — семантический поиск среди уже собранного. «Найти в вебе» —
-        LLM придумает запросы, SearXNG принесёт новые статьи в текущий канал.
+        «Найти в вебе» — LLM придумает запросы, SearXNG принесёт новые статьи. Они
+        попадают сюда на одобрение: «одобрить» добавит статью в общую таблицу,
+        «отклонить» уберёт из предложений.
       </div>
+
+      {pending.length > 0 && (
+        <div style={{ marginTop: 14 }}>
+          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 8 }}>
+            Предложено к одобрению ({pending.length})
+          </div>
+          {pending.map((a) => (
+            <div
+              key={a.id}
+              style={{
+                border: "1px solid var(--line)",
+                borderRadius: 10,
+                padding: "10px 12px",
+                marginBottom: 8,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  gap: 10,
+                  alignItems: "baseline",
+                  justifyContent: "space-between",
+                  flexWrap: "wrap",
+                }}
+              >
+                <a
+                  className="title"
+                  href={a.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ fontWeight: 600 }}
+                >
+                  {a.title}
+                </a>
+                <div style={{ display: "flex", gap: 12, whiteSpace: "nowrap" }}>
+                  <button
+                    className="alink"
+                    disabled={actId === a.id}
+                    onClick={() => decide(a.id, "approve")}
+                  >
+                    одобрить
+                  </button>
+                  <button
+                    className="alink"
+                    disabled={actId === a.id}
+                    onClick={() => decide(a.id, "reject")}
+                  >
+                    отклонить
+                  </button>
+                </div>
+              </div>
+              <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
+                {a.source}
+                {a.relevance_score != null ? ` · оценка ${a.relevance_score}` : ""}
+              </div>
+              {a.post_text && (
+                <div
+                  style={{
+                    fontSize: 13,
+                    marginTop: 6,
+                    whiteSpace: "pre-wrap",
+                    maxHeight: 120,
+                    overflow: "auto",
+                  }}
+                >
+                  {a.post_text}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

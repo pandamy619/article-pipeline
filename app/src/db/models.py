@@ -64,6 +64,8 @@ class ArticleRecord(Base):
     )
     embedding: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON-вектор
     image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # найдено веб-поиском и ждёт одобрения: скрыто из общей таблицы до approve
+    review: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     tg_message_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow

@@ -258,6 +258,16 @@ export async function searchArticles(
   return r.json();
 }
 
+export async function fetchPendingWeb(channel?: number | null): Promise<Article[]> {
+  const q = channel != null ? `?channel=${channel}` : "";
+  return (await req(`/api/search/pending${q}`)).json();
+}
+
+export async function approveArticle(id: number): Promise<void> {
+  const r = await req(`/api/articles/${id}/approve`, { method: "POST" });
+  if (!r.ok) throw new Error(`approve: HTTP ${r.status}`);
+}
+
 export interface ChatMsg {
   role: "user" | "assistant";
   content: string;

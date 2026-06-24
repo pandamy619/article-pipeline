@@ -36,7 +36,11 @@ def _existing_id(session: Session, url: str, content_hash_: str) -> int | None:
 
 
 def save_articles(
-    session: Session, articles: Iterable[Article], *, channel_id: int | None = None
+    session: Session,
+    articles: Iterable[Article],
+    *,
+    channel_id: int | None = None,
+    review: bool = False,
 ) -> SaveResult:
     """Сохраняет новые статьи, пропуская дубли по URL и по хешу контента.
 
@@ -72,6 +76,7 @@ def save_articles(
             published_at=art.published_at,
             image_url=art.image_url,
             status=ArticleStatus.new,
+            review=review,
         )
         try:
             with session.begin_nested():
