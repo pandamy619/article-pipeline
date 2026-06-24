@@ -33,6 +33,7 @@ import {
   updateChannel,
 } from "./api";
 import type { Article, Channel, CollectJob, Feed, LastRun, Stats } from "./types";
+import { confirmDialog, toast } from "./ui";
 
 const STATUSES = [
   "new",
@@ -108,7 +109,11 @@ export default function App() {
       setCollectJob(job);
     } catch (e) {
       if (e instanceof AuthError) setNeedLogin(true);
-      else alert(`Не удалось запустить сбор: ${e instanceof Error ? e.message : String(e)}`);
+      else
+        toast(
+          `Не удалось запустить сбор: ${e instanceof Error ? e.message : String(e)}`,
+          "error",
+        );
     }
   }
 
@@ -177,7 +182,7 @@ export default function App() {
         setCollectJob(j);
         if (j.status === "done" || j.status === "error") {
           await refresh(filter, currentChannel);
-          if (j.status === "error") alert(`Сбор упал: ${j.error ?? ""}`);
+          if (j.status === "error") toast(`Сбор упал: ${j.error ?? ""}`, "error");
           setTimeout(
             () => setCollectJob((c) => (c && c.id === j.id ? null : c)),
             7000,
@@ -226,7 +231,7 @@ export default function App() {
       await refresh(filter, currentChannel);
     } catch (e) {
       if (e instanceof AuthError) setNeedLogin(true);
-      else alert(`Ошибка: ${e instanceof Error ? e.message : String(e)}`);
+      else toast(`Ошибка: ${e instanceof Error ? e.message : String(e)}`, "error");
     } finally {
       setBusy(false);
     }
@@ -406,8 +411,13 @@ export default function App() {
           <button
             className="btn"
             disabled={busy}
-            onClick={() => {
-              if (confirm(`Опубликовать ${selected.size} статей в канал сейчас?`)) {
+            onClick={async () => {
+              if (
+                await confirmDialog(
+                  `Опубликовать ${selected.size} статей в канал сейчас?`,
+                  "Опубликовать",
+                )
+              ) {
                 runBulk("publish");
               }
             }}
@@ -586,14 +596,20 @@ export default function App() {
                               className="alink"
                               disabled={locked || published}
                               title={!hasPost ? "сначала создайте пост" : undefined}
-                              onClick={() => {
+                              onClick={async () => {
                                 if (!a.post_text) {
-                                  alert(
+                                  toast(
                                     "Сначала создайте пост — «сделать пост» или «правка».",
+                                    "info",
                                   );
                                   return;
                                 }
-                                if (confirm("Опубликовать пост в Telegram-канал?")) {
+                                if (
+                                  await confirmDialog(
+                                    "Опубликовать пост в Telegram-канал?",
+                                    "Опубликовать",
+                                  )
+                                ) {
                                   run(() => runAction(a.id, "publish"));
                                 }
                               }}
@@ -773,7 +789,7 @@ function EditPanel({
       await savePost(article.id, text);
       await onChanged();
     } catch (e) {
-      alert(`Ошибка: ${e instanceof Error ? e.message : String(e)}`);
+      toast(`Ошибка: ${e instanceof Error ? e.message : String(e)}`, "error");
     } finally {
       setWorking(false);
     }
@@ -904,7 +920,7 @@ function SchedulePanel({
       await fn();
       await onChanged();
     } catch (e) {
-      alert(`Ошибка: ${e instanceof Error ? e.message : String(e)}`);
+      toast(`Ошибка: ${e instanceof Error ? e.message : String(e)}`, "error");
     } finally {
       setBusy(false);
     }
@@ -1057,7 +1073,7 @@ function SearchPanel({
       const r = await searchArticles(q, "web", channel);
       setWebJob(r.job ?? null);
     } catch (e) {
-      alert(`Ошибка: ${e instanceof Error ? e.message : String(e)}`);
+      toast(`Ошибка: ${e instanceof Error ? e.message : String(e)}`, "error");
     } finally {
       setBusy(false);
     }
@@ -1097,7 +1113,7 @@ function SearchPanel({
       });
       onChanged(); // одобренная появится в общей таблице
     } catch (e) {
-      alert(`Ошибка: ${e instanceof Error ? e.message : String(e)}`);
+      toast(`Ошибка: ${e instanceof Error ? e.message : String(e)}`, "error");
     } finally {
       setActId(null);
     }
@@ -1121,7 +1137,7 @@ function SearchPanel({
       await loadPending();
       onChanged();
     } catch (e) {
-      alert(`Ошибка: ${e instanceof Error ? e.message : String(e)}`);
+      toast(`Ошибка: ${e instanceof Error ? e.message : String(e)}`, "error");
     }
   }
 
@@ -1388,7 +1404,7 @@ function ChannelsPanel({
         await onChanged();
       }
     } catch (e) {
-      alert(`Ошибка: ${e instanceof Error ? e.message : String(e)}`);
+      toast(`Ошибка: ${e instanceof Error ? e.message : String(e)}`, "error");
     } finally {
       setBusy(false);
     }
@@ -1396,7 +1412,8 @@ function ChannelsPanel({
 
   async function remove() {
     if (editId === "new") return;
-    if (!confirm("Удалить проект? Его статьи отвяжутся.")) return;
+    if (!(await confirmDialog("Удалить проект? Его статьи отвяжутся.", "Удалить")))
+      return;
     setBusy(true);
     try {
       await deleteChannel(editId);
@@ -1404,7 +1421,7 @@ function ChannelsPanel({
       setForm({ ...EMPTY_CHANNEL });
       await onChanged();
     } catch (e) {
-      alert(`Ошибка: ${e instanceof Error ? e.message : String(e)}`);
+      toast(`Ошибка: ${e instanceof Error ? e.message : String(e)}`, "error");
     } finally {
       setBusy(false);
     }
@@ -1554,7 +1571,7 @@ function SettingsPanel() {
       setSaved(true);
       await load();
     } catch (e) {
-      alert(`Ошибка: ${e instanceof Error ? e.message : String(e)}`);
+      toast(`Ошибка: ${e instanceof Error ? e.message : String(e)}`, "error");
     } finally {
       setBusy(false);
     }
@@ -1646,7 +1663,7 @@ function FeedsPanel() {
       await fn();
       await load();
     } catch (e) {
-      alert(`Ошибка: ${e instanceof Error ? e.message : String(e)}`);
+      toast(`Ошибка: ${e instanceof Error ? e.message : String(e)}`, "error");
     } finally {
       setBusy(false);
     }
