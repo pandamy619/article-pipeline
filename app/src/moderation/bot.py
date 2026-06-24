@@ -54,6 +54,17 @@ async def _notify_admin(text: str) -> None:
     admin = _admin_id()
     if not admin or not settings.telegram_bot_token:
         return
+    # не шлём уведомления в чат, который является каналом публикации (утечка)
+    with get_session() as session:
+        leak = any(
+            (c.channel_id or "").strip() == str(admin) for c in list_channels(session)
+        )
+    if leak:
+        log.warning(
+            "ADMIN_USER_ID == канал публикации — уведомление в канал не шлю. "
+            "Укажи личный id (команда /id боту)."
+        )
+        return
     bot = make_bot(settings.telegram_bot_token)
     try:
         await bot.send_message(admin, text)
@@ -64,12 +75,23 @@ async def _notify_admin(text: str) -> None:
 
 
 async def _send_drafts_for(channel_id: int) -> int:
-    """Черновики одного канала — его админу через его бота."""
+    """Черновики одного канала — его админу в личку через его бота."""
     with get_session() as session:
         ch = get_channel(session, channel_id)
         token = ch.bot_token if ch else ""
         admin = _admin_id_for(ch) if ch else None
+        chat = (ch.channel_id or "").strip() if ch else ""
     if not token or not admin:
+        return 0
+    # защита от утечки: НЕ шлём черновики с кнопками в сам канал публикации —
+    # их увидят подписчики. admin_user_id должен быть ЛИЧНЫМ id (узнать: /id боту)
+    if chat and str(admin) == chat:
+        log.warning(
+            "channel %s: admin_user_id == канал публикации (%s) — черновики в канал "
+            "НЕ шлю. Укажи личный admin_user_id (команда /id боту).",
+            channel_id,
+            chat,
+        )
         return 0
     with get_session() as session:
         drafts = [

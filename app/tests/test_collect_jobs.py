@@ -178,6 +178,40 @@ def test_publish_due_unschedules_on_bad_request(memdb, monkeypatch):
     assert "chat not found" in notified["text"]
 
 
+def test_send_drafts_skips_when_admin_equals_channel(memdb, monkeypatch):
+    import src.moderation.bot as bot
+    from src.db.models import ArticleRecord, ArticleStatus, Channel
+
+    s = memdb()
+    ch = Channel(
+        name="c", bot_token="t", channel_id="-100777", admin_user_id="-100777"
+    )
+    s.add(ch)
+    s.flush()
+    s.add(
+        ArticleRecord(
+            url="u",
+            content_hash="h",
+            title="t",
+            text="x",
+            status=ArticleStatus.drafted,
+            post_text="пост",
+            channel_id=ch.id,
+        )
+    )
+    s.commit()
+    cid = ch.id
+    s.close()
+
+    def _boom(token):
+        raise AssertionError("в канал публикации слать черновики нельзя!")
+
+    monkeypatch.setattr(bot, "make_bot", _boom)
+
+    # admin_user_id совпадает с каналом -> ничего не отправляем (бота даже не создаём)
+    assert asyncio.run(bot._send_drafts_for(cid)) == 0
+
+
 def test_drain_noop_when_empty(memdb, monkeypatch):
     import src.moderation.bot as bot
 
