@@ -1529,18 +1529,9 @@ function ChannelsPanel({
 const SETTING_LABELS: Record<string, string> = {
   llm_model: "Модель LLM",
   embed_model: "Модель эмбеддингов",
-  channel_topic: "Тематика канала (для фильтра)",
-  relevance_threshold: "Порог релевантности (0–10)",
-  run_interval_minutes: "Интервал прогона (мин) ⟳",
-  publish_interval_minutes: "Интервал публикации (мин) ⟳",
   max_articles_per_run: "Лимит статей за прогон (0 = без)",
   semantic_dedup_enabled: "Семантический дедуп",
   semantic_dedup_threshold: "Порог дедупа (0–1)",
-  habr_enabled: "Habr включён",
-  habr_hubs: "Habr: хабы через запятую",
-  arxiv_categories: "arXiv: категории",
-  reddit_subreddits: "Reddit: сабреддиты",
-  searxng_queries: "Веб-поиск: запросы",
 };
 
 function SettingsPanel() {
@@ -1587,6 +1578,11 @@ function SettingsPanel() {
 
   return (
     <div className="card" style={{ padding: "14px 16px", marginBottom: 16 }}>
+      <div className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
+        Здесь только общие для всего сервиса настройки. Тематика, порог
+        релевантности, источники и интервалы сбора/публикации настраиваются в
+        разделе «Проекты» отдельно для каждого проекта.
+      </div>
       <div
         style={{
           display: "grid",
@@ -1609,12 +1605,6 @@ function SettingsPanel() {
                 <option value="true">вкл</option>
                 <option value="false">выкл</option>
               </select>
-            ) : k === "channel_topic" ? (
-              <textarea
-                value={form[k] ?? ""}
-                onChange={(e) => setForm({ ...form, [k]: e.target.value })}
-                style={{ ...inp, minHeight: 60, resize: "vertical" }}
-              />
             ) : (
               <input
                 type={types[k] === "int" || types[k] === "float" ? "number" : "text"}

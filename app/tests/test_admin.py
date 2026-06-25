@@ -243,13 +243,18 @@ def test_articles_scoped_by_channel(client):
 def test_settings_api_get_and_set(client, monkeypatch):
     import src.config
 
-    monkeypatch.setattr(src.config.settings, "relevance_threshold", 7)
+    monkeypatch.setattr(src.config.settings, "max_articles_per_run", 0)
     data = client.get("/api/settings").json()
-    assert "relevance_threshold" in data["settings"]
+    assert "max_articles_per_run" in data["settings"]
     assert "types" in data
+    # per-project ключи в глобальных настройках больше не редактируются
+    assert "relevance_threshold" not in data["settings"]
+    assert client.post(
+        "/api/settings", json={"key": "max_articles_per_run", "value": "5"}
+    ).json() == {"ok": True}
     assert client.post(
         "/api/settings", json={"key": "relevance_threshold", "value": "9"}
-    ).json() == {"ok": True}
+    ).json() == {"ok": False}  # уже не глобальный
     assert client.post("/api/settings", json={"key": "nope", "value": "x"}).json() == {
         "ok": False
     }

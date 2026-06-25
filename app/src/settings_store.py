@@ -13,22 +13,15 @@ from sqlalchemy.orm import Session
 from src.config import settings
 from src.db.models import AppSetting
 
-# редактируемые ключи -> тип (для каста из строки)
+# Только ГЛОБАЛЬНЫЕ ключи (на весь сервис). Тематика, порог, источники,
+# интервалы сбора/публикации — это настройки ПРОЕКТА (вкладка «Проекты»),
+# здесь их быть не должно, иначе дублирование.
 EDITABLE: dict[str, str] = {
     "llm_model": "str",
     "embed_model": "str",
-    "channel_topic": "str",
-    "relevance_threshold": "int",
-    "run_interval_minutes": "int",
-    "publish_interval_minutes": "int",
     "max_articles_per_run": "int",
     "semantic_dedup_enabled": "bool",
     "semantic_dedup_threshold": "float",
-    "habr_enabled": "bool",
-    "habr_hubs": "str",
-    "arxiv_categories": "str",
-    "reddit_subreddits": "str",
-    "searxng_queries": "str",
 }
 
 
