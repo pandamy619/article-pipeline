@@ -536,6 +536,16 @@ table.tbl {
 .tg-photo-wrap {
   position: relative;
 }
+.tg-photo-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 92px;
+  background: #eef1f5;
+  color: var(--muted);
+  font-size: 13px;
+}
 .tg-photo-ctl {
   position: absolute;
   top: 8px;

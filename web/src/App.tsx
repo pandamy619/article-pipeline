@@ -887,7 +887,7 @@ function EditPanel({
         <div className="col">
           <div className="tg-wrap">
             <div className="tg-compose">
-              {img && (
+              {img ? (
                 <div className="tg-photo-wrap">
                   <img className="tg-photo" src={img} alt="" />
                   <div className="tg-photo-ctl">
@@ -907,6 +907,17 @@ function EditPanel({
                     </button>
                   </div>
                 </div>
+              ) : (
+                <div className="tg-photo-empty">
+                  <span>Картинки нет</span>
+                  <button
+                    className="alink"
+                    disabled={working}
+                    onClick={() => fileRef.current?.click()}
+                  >
+                    загрузить
+                  </button>
+                </div>
               )}
               <textarea
                 className="tg-compose-text"
@@ -914,18 +925,6 @@ function EditPanel({
                 onChange={(e) => setText(e.target.value)}
               />
             </div>
-            {!img && (
-              <div className="tg-imgbar">
-                <span className="muted">Картинки нет.</span>
-                <button
-                  className="alink"
-                  disabled={working}
-                  onClick={() => fileRef.current?.click()}
-                >
-                  загрузить
-                </button>
-              </div>
-            )}
             <input
               ref={fileRef}
               type="file"
