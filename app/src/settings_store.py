@@ -22,6 +22,9 @@ EDITABLE: dict[str, str] = {
     "max_articles_per_run": "int",
     "semantic_dedup_enabled": "bool",
     "semantic_dedup_threshold": "float",
+    # ключи поиска картинок (Фаза 2) — глобальные, на весь сервис
+    "pexels_api_key": "str",
+    "pixabay_api_key": "str",
 }
 
 

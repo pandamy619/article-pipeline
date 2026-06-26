@@ -1029,8 +1029,8 @@ function EditPanel({
                 ) : (
                   !searching && (
                     <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>
-                      Пусто. Сток требует ключей Pexels/Pixabay в .env; «Веб» — через
-                      SearXNG.
+                      Пусто. Сток требует ключей Pexels/Pixabay (раздел
+                      «Настройки»); «Веб» — через SearXNG.
                     </div>
                   )
                 )}
@@ -1741,6 +1741,8 @@ const SETTING_LABELS: Record<string, string> = {
   max_articles_per_run: "Лимит статей за прогон (0 = без)",
   semantic_dedup_enabled: "Семантический дедуп",
   semantic_dedup_threshold: "Порог дедупа (0–1)",
+  pexels_api_key: "Pexels API-ключ (поиск картинок)",
+  pixabay_api_key: "Pixabay API-ключ (поиск картинок)",
 };
 
 function SettingsPanel() {
@@ -1816,7 +1818,13 @@ function SettingsPanel() {
               </select>
             ) : (
               <input
-                type={types[k] === "int" || types[k] === "float" ? "number" : "text"}
+                type={
+                  types[k] === "int" || types[k] === "float"
+                    ? "number"
+                    : k.endsWith("_api_key")
+                      ? "password"
+                      : "text"
+                }
                 step={types[k] === "float" ? "0.01" : "1"}
                 value={form[k] ?? ""}
                 onChange={(e) => setForm({ ...form, [k]: e.target.value })}

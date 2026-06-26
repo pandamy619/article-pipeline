@@ -16,6 +16,12 @@ def test_set_rejects_unknown_key(session):
     assert set_override(session, "not_a_setting", "x") is False
 
 
+def test_image_keys_are_editable(session):
+    # ключи поиска картинок настраиваются в админке (Настройки), не только в .env
+    assert set_override(session, "pexels_api_key", "abc") is True
+    assert set_override(session, "pixabay_api_key", "xyz") is True
+
+
 def test_set_rejects_per_project_key(session):
     # тематика/порог/источники — настройки проекта, не глобальные
     assert set_override(session, "relevance_threshold", "9") is False
