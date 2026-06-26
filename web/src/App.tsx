@@ -840,6 +840,18 @@ function EditPanel({
     }
   }
 
+  async function cancel() {
+    const original = article.post_text ?? "";
+    if (
+      text !== original &&
+      !(await confirmDialog("Отменить несохранённые изменения текста?", "Отменить"))
+    ) {
+      return;
+    }
+    setText(original); // откат к последнему сохранённому
+    onPreview();
+  }
+
   async function send() {
     const msg = input.trim();
     if (!msg) return;
@@ -868,6 +880,9 @@ function EditPanel({
       <div className="toolbar">
         <button className="btn" onClick={onPreview}>
           Превью
+        </button>
+        <button className="btn" disabled={working} onClick={cancel}>
+          Отменить
         </button>
         <button className="btn btn-primary" disabled={working} onClick={save}>
           Сохранить
