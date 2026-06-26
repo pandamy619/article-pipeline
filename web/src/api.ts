@@ -279,6 +279,35 @@ export async function uploadFile(
   return d.url as string;
 }
 
+export interface ImageHit {
+  url: string;
+  thumb: string;
+  source: string;
+  title: string;
+}
+
+export async function searchImages(
+  q: string,
+  source: "stock" | "web",
+): Promise<ImageHit[]> {
+  const r = await req(`/api/images/search?q=${encodeURIComponent(q)}&source=${source}`);
+  if (!r.ok) throw new Error(`image search: HTTP ${r.status}`);
+  const d = await r.json().catch(() => ({}));
+  return (d.results ?? []) as ImageHit[];
+}
+
+export async function fetchImageToMedia(url: string): Promise<string> {
+  const r = await req("/api/image/fetch", {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ url }),
+  });
+  if (!r.ok) throw new Error(`fetch image: HTTP ${r.status}`);
+  const d = await r.json().catch(() => ({}));
+  if (d.ok === false) throw new Error(d.error || "не удалось скачать картинку");
+  return d.url as string;
+}
+
 export async function fetchPendingWeb(channel?: number | null): Promise<Article[]> {
   const q = channel != null ? `?channel=${channel}` : "";
   return (await req(`/api/search/pending${q}`)).json();

@@ -293,6 +293,41 @@ def serve_media(filename: str) -> FileResponse:
     return FileResponse(path)
 
 
+@app.get("/api/images/search")
+async def images_search(q: str, source: str = "stock") -> dict[str, object]:
+    """Поиск картинок: source=stock (Pexels/Pixabay) | web (SearXNG)."""
+    from dataclasses import asdict
+
+    from src.images.search import search_images
+
+    hits = await asyncio.to_thread(search_images, q, source=source)
+    return {"results": [asdict(h) for h in hits]}
+
+
+class FetchIn(BaseModel):
+    url: str
+
+
+# НЕ под /api/media/ — тот префикс отдаётся без токена; скачивание должно быть под токеном
+@app.post("/api/image/fetch")
+def fetch_image(body: FetchIn) -> dict[str, object]:
+    """Скачивает выбранную в поиске внешнюю картинку в media -> возвращает url."""
+    import httpx
+
+    try:
+        resp = httpx.get(body.url, timeout=30, follow_redirects=True)
+        resp.raise_for_status()
+    except Exception as exc:  # noqa: BLE001 — отдаём причину, не 500
+        return {"ok": False, "error": f"не удалось скачать: {exc}"}
+    blob = resp.content
+    if not blob:
+        return {"ok": False, "error": "пустая картинка"}
+    if len(blob) > 12 * 1024 * 1024:
+        return {"ok": False, "error": "картинка больше 12 МБ"}
+    mime = resp.headers.get("content-type", "").split(";")[0].strip()
+    return {"ok": True, "url": media.save_bytes(blob, filename=body.url, mime=mime)}
+
+
 class BulkIn(BaseModel):
     ids: list[int]
     action: str  # reject | approve | queue | unqueue | publish

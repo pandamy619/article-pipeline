@@ -24,16 +24,19 @@ import {
   fetchArticles,
   fetchChannels,
   fetchFeeds,
+  fetchImageToMedia,
   fetchLastRun,
   fetchPendingWeb,
   fetchSettings,
   fetchStats,
+  type ImageHit,
   getToken,
   runAction,
   savePost,
   saveSetting,
   scheduleArticle,
   searchArticles,
+  searchImages,
   setArticleStatus,
   setToken,
   unscheduleArticle,
@@ -794,6 +797,30 @@ function EditPanel({
   const [img, setImg] = useState<string | null>(article.image_url);
   const [pendingName, setPendingName] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [search, setSearch] = useState(false);
+  const [imgQuery, setImgQuery] = useState(article.title ?? "");
+  const [imgSource, setImgSource] = useState<"stock" | "web">("stock");
+  const [hits, setHits] = useState<ImageHit[]>([]);
+  const [searching, setSearching] = useState(false);
+
+  async function runImgSearch() {
+    const q = imgQuery.trim();
+    if (!q) return;
+    setSearching(true);
+    try {
+      setHits(await searchImages(q, imgSource));
+    } catch (e) {
+      toast(`Ошибка: ${e instanceof Error ? e.message : String(e)}`, "error");
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  function pickHit(h: ImageHit) {
+    setImg(h.url); // внешний url — стейдж; скачается в media при «Сохранить»
+    setPendingName(null);
+    setSearch(false);
+  }
 
   function onPickImage(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -816,13 +843,15 @@ function EditPanel({
     setWorking(true);
     try {
       let url = img;
-      // новый файл (data:URL) заливаем в media только сейчас, при сохранении
-      if (pendingName && img && img.startsWith("data:")) {
-        url = await uploadFile(pendingName, img);
-        setImg(url);
-        setPendingName(null);
+      // новую картинку заливаем в media только сейчас: свой файл (data:) или
+      // выбранная в поиске (внешний http) — скачиваем на сервер
+      if (img && img !== article.image_url) {
+        if (img.startsWith("data:")) url = await uploadFile(pendingName ?? "image", img);
+        else if (/^https?:\/\//i.test(img)) url = await fetchImageToMedia(img);
       }
       await savePost(article.id, text, url);
+      setImg(url);
+      setPendingName(null);
       await onChanged();
     } catch (e) {
       toast(`Ошибка: ${e instanceof Error ? e.message : String(e)}`, "error");
@@ -900,6 +929,12 @@ function EditPanel({
                     </button>
                     <button
                       className="tg-photo-btn"
+                      onClick={() => setSearch((s) => !s)}
+                    >
+                      найти
+                    </button>
+                    <button
+                      className="tg-photo-btn"
                       disabled={working}
                       onClick={removeImage}
                     >
@@ -917,6 +952,9 @@ function EditPanel({
                   >
                     загрузить
                   </button>
+                  <button className="alink" onClick={() => setSearch((s) => !s)}>
+                    найти
+                  </button>
                 </div>
               )}
               <textarea
@@ -925,6 +963,56 @@ function EditPanel({
                 onChange={(e) => setText(e.target.value)}
               />
             </div>
+            {search && (
+              <div className="img-search">
+                <div className="img-search-bar">
+                  <input
+                    value={imgQuery}
+                    onChange={(e) => setImgQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") runImgSearch();
+                    }}
+                    placeholder="что искать (напр. python code)"
+                  />
+                  <select
+                    value={imgSource}
+                    onChange={(e) =>
+                      setImgSource(e.target.value as "stock" | "web")
+                    }
+                  >
+                    <option value="stock">Сток</option>
+                    <option value="web">Веб</option>
+                  </select>
+                  <button
+                    className="btn btn-primary"
+                    disabled={searching || !imgQuery.trim()}
+                    onClick={runImgSearch}
+                  >
+                    {searching ? "Ищу…" : "Найти"}
+                  </button>
+                </div>
+                {hits.length > 0 ? (
+                  <div className="img-grid">
+                    {hits.map((h, i) => (
+                      <img
+                        key={i}
+                        src={h.thumb}
+                        alt={h.title}
+                        title={h.title}
+                        onClick={() => pickHit(h)}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  !searching && (
+                    <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+                      Пусто. Сток требует ключей Pexels/Pixabay в .env; «Веб» — через
+                      SearXNG.
+                    </div>
+                  )
+                )}
+              </div>
+            )}
             <input
               ref={fileRef}
               type="file"

@@ -455,6 +455,37 @@ def test_image_upload_serve_and_save_flow(client, monkeypatch, tmp_path):
     assert img1() is None
 
 
+def test_images_search_endpoint_wired(client):
+    # без ключей/SearXNG возвращает пустой список, но ручка отвечает корректно
+    r = client.get("/api/images/search?q=python&source=web")
+    assert r.status_code == 200
+    assert isinstance(r.json()["results"], list)
+
+
+def test_fetch_image_to_media(client, monkeypatch, tmp_path):
+    import httpx
+
+    import src.config
+
+    monkeypatch.setattr(src.config.settings, "media_dir", str(tmp_path))
+
+    class FakeResp:
+        content = b"\x89PNG\r\nDATA"
+        headers = {"content-type": "image/png"}
+
+        def raise_for_status(self):
+            pass
+
+    monkeypatch.setattr(httpx, "get", lambda *a, **k: FakeResp())
+
+    r = client.post("/api/image/fetch", json={"url": "https://x/photo"})
+    assert r.status_code == 200 and r.json()["ok"] is True
+    url = r.json()["url"]
+    assert url.startswith("/api/media/")
+    fname = url.rsplit("/", 1)[-1]
+    assert client.get(f"/api/media/{fname}").content == b"\x89PNG\r\nDATA"
+
+
 def test_chat(client, monkeypatch):
     import src.llm.client as llm
 

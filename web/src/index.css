@@ -546,6 +546,48 @@ table.tbl {
   color: var(--muted);
   font-size: 13px;
 }
+/* поиск картинок в редакторе (Фаза 2) */
+.img-search {
+  margin-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px;
+}
+.img-search-bar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.img-search-bar input,
+.img-search-bar select {
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  padding: 7px 10px;
+  font-size: 13px;
+  font-family: var(--font);
+}
+.img-search-bar input {
+  flex: 1;
+  min-width: 160px;
+}
+.img-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+.img-grid img {
+  width: 100%;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  cursor: pointer;
+}
+.img-grid img:hover {
+  outline: 2px solid var(--accent);
+}
 .tg-photo-ctl {
   position: absolute;
   top: 8px;

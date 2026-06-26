@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     redis_url: str = ""
     searxng_url: str = ""
 
+    # Поиск картинок (Фаза 2): бесплатные сток-API + SearXNG (уже есть выше)
+    pexels_api_key: str = ""
+    pixabay_api_key: str = ""
+
     # Telegram
     telegram_bot_token: str = ""
     telegram_channel_id: str = ""
