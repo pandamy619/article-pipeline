@@ -819,26 +819,27 @@ function EditPanel({
   }
 
   return (
-    <div className="panel">
-      <div className="col">
-        <div className="toolbar">
-          <button className="btn" onClick={onPreview}>
-            Превью
-          </button>
-          <button className="btn btn-primary" disabled={working} onClick={save}>
-            Сохранить
-          </button>
-        </div>
-        <div className="tg-wrap">
-          <textarea
-            className="tg-edit"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-          />
-        </div>
+    <div>
+      <div className="toolbar">
+        <button className="btn" onClick={onPreview}>
+          Превью
+        </button>
+        <button className="btn btn-primary" disabled={working} onClick={save}>
+          Сохранить
+        </button>
       </div>
+      <div className="panel">
+        <div className="col">
+          <div className="tg-wrap">
+            <textarea
+              className="tg-edit"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+            />
+          </div>
+        </div>
 
-      <div className="chat">
+        <div className="chat">
         <div className="chat-title">Чат с ИИ по статье</div>
         <div className="chat-log">
           {messages.length === 0 && (
@@ -868,6 +869,7 @@ function EditPanel({
           <button className="btn btn-primary" disabled={working} onClick={send}>
             Отправить
           </button>
+        </div>
         </div>
       </div>
     </div>
