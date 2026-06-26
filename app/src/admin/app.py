@@ -304,6 +304,23 @@ async def images_search(q: str, source: str = "stock") -> dict[str, object]:
     return {"results": [asdict(h) for h in hits]}
 
 
+class KeywordsIn(BaseModel):
+    text: str
+
+
+@app.post("/api/images/keywords")
+async def images_keywords(body: KeywordsIn) -> dict[str, str]:
+    """LLM придумывает короткий запрос для поиска картинки по тексту поста."""
+
+    def _run() -> str:
+        from src.images.search import image_keywords
+        from src.llm.client import OllamaClient
+
+        return image_keywords(OllamaClient(), body.text)
+
+    return {"query": await asyncio.to_thread(_run)}
+
+
 class FetchIn(BaseModel):
     url: str
 

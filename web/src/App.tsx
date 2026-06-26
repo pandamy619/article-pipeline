@@ -26,6 +26,7 @@ import {
   fetchFeeds,
   fetchImageToMedia,
   fetchLastRun,
+  imageKeywords,
   fetchPendingWeb,
   fetchSettings,
   fetchStats,
@@ -802,6 +803,7 @@ function EditPanel({
   const [imgSource, setImgSource] = useState<"stock" | "web">("stock");
   const [hits, setHits] = useState<ImageHit[]>([]);
   const [searching, setSearching] = useState(false);
+  const [kwBusy, setKwBusy] = useState(false);
 
   async function runImgSearch() {
     const q = imgQuery.trim();
@@ -813,6 +815,19 @@ function EditPanel({
       toast(`Ошибка: ${e instanceof Error ? e.message : String(e)}`, "error");
     } finally {
       setSearching(false);
+    }
+  }
+
+  async function suggestKeywords() {
+    setKwBusy(true);
+    try {
+      const q = await imageKeywords(text); // запрос по всему тексту поста
+      if (q) setImgQuery(q);
+      else toast("LLM не дал запрос (модель доступна?)", "info");
+    } catch (e) {
+      toast(`Ошибка: ${e instanceof Error ? e.message : String(e)}`, "error");
+    } finally {
+      setKwBusy(false);
     }
   }
 
@@ -983,6 +998,14 @@ function EditPanel({
                     <option value="stock">Сток</option>
                     <option value="web">Веб</option>
                   </select>
+                  <button
+                    className="btn"
+                    disabled={kwBusy}
+                    title="придумать запрос по тексту поста"
+                    onClick={suggestKeywords}
+                  >
+                    {kwBusy ? "…" : "по тексту"}
+                  </button>
                   <button
                     className="btn btn-primary"
                     disabled={searching || !imgQuery.trim()}

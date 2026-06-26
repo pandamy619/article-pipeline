@@ -1,5 +1,22 @@
 import src.config
-from src.images.search import search_images
+from src.images.search import image_keywords, search_images
+
+
+class _FakeLLM:
+    def __init__(self, reply="искусственный интеллект"):
+        self.reply = reply
+
+    def generate(self, prompt, *, system=None, format=None):
+        return self.reply
+
+
+def test_image_keywords_takes_first_line_clean():
+    q = image_keywords(_FakeLLM('  "нейросети" \nлишнее'), "длинный текст про ИИ")
+    assert q == "нейросети"
+
+
+def test_image_keywords_empty_text():
+    assert image_keywords(_FakeLLM(), "") == ""
 
 
 def test_search_stock_pexels_and_pixabay(monkeypatch):

@@ -296,6 +296,17 @@ export async function searchImages(
   return (d.results ?? []) as ImageHit[];
 }
 
+export async function imageKeywords(text: string): Promise<string> {
+  const r = await req("/api/images/keywords", {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ text }),
+  });
+  if (!r.ok) throw new Error(`keywords: HTTP ${r.status}`);
+  const d = await r.json().catch(() => ({}));
+  return (d.query as string) ?? "";
+}
+
 export async function fetchImageToMedia(url: string): Promise<string> {
   const r = await req("/api/image/fetch", {
     method: "POST",

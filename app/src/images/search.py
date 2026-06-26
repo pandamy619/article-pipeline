@@ -119,6 +119,25 @@ def _searx(query: str, limit: int, fetcher: Callable[[str], dict] | None) -> lis
     return hits
 
 
+def image_keywords(client, text: str) -> str:
+    """По тексту поста LLM придумывает короткий запрос для поиска иллюстрации."""
+    text = (text or "").strip()
+    if not text:
+        return ""
+    system = (
+        "Ты подбираешь иллюстрацию к посту. По тексту придумай ОДИН короткий "
+        "поисковый запрос для фотостока: 2–4 слова, без хэштегов, кавычек и "
+        "пунктуации. Можно по-английски, если так найдётся лучше. Ответь ТОЛЬКО "
+        "запросом, без пояснений."
+    )
+    try:
+        raw = client.generate(text[:2000], system=system)
+    except Exception:  # noqa: BLE001 — нет LLM -> пустой запрос
+        return ""
+    line = (raw or "").strip().splitlines()[0] if raw else ""
+    return line.strip().strip('"').strip()[:80]
+
+
 def search_images(
     query: str,
     *,
