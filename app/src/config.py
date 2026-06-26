@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     admin_user_id: str = ""
     admin_token: str = ""  # токен для входа в веб-админку; пусто = без авторизации
     telegram_proxy: str = ""  # http://host:port — если api.telegram.org заблокирован
+    media_dir: str = "media"  # папка для своих/сгенерированных картинок (том в проде)
 
     # Поведение
     relevance_threshold: int = 7

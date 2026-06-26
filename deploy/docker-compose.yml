@@ -85,9 +85,11 @@ services:
       - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       - REDIS_URL=redis://valkey:6379/0
       - SEARXNG_URL=http://searxng:8080
+      - MEDIA_DIR=/app/media
     volumes:
       - ../app:/app
       - ../sessions:/app/sessions   # .session Telethon
+      - media:/app/media            # картинки постов (общий том с admin)
     restart: unless-stopped
 
   # Веб-админка: просмотр статей и ручной отбор (http://localhost:8000)
@@ -103,10 +105,12 @@ services:
       - REDIS_URL=redis://valkey:6379/0
       - SEARXNG_URL=http://searxng:8080
       - OLLAMA_HOST=http://ollama:11434
+      - MEDIA_DIR=/app/media
     command: ["uvicorn", "src.admin.app:app", "--host", "0.0.0.0", "--port", "8000"]
     ports: ["8000:8000"]
     volumes:
       - ../app:/app
+      - media:/app/media            # картинки постов (общий том с app)
     restart: unless-stopped
 
   # Фронтенд: React-клиент, раздаётся nginx + проксирует /api на admin (http://localhost:3000)
@@ -130,3 +134,4 @@ volumes:
   ollama:
   pgdata:
   n8ndata:
+  media:

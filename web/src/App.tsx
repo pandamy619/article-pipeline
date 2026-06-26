@@ -1,4 +1,11 @@
-import { type CSSProperties, Fragment, useEffect, useState } from "react";
+import {
+  type ChangeEvent,
+  type CSSProperties,
+  Fragment,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   addFeed,
   approveArticle,
@@ -7,6 +14,7 @@ import {
   type ChatMsg,
   chatArticle,
   checkAuth,
+  clearImage,
   clearToken,
   collect,
   collectActive,
@@ -31,6 +39,7 @@ import {
   setToken,
   unscheduleArticle,
   updateChannel,
+  uploadImage,
 } from "./api";
 import type { Article, Channel, CollectJob, Feed, LastRun, Stats } from "./types";
 import { confirmDialog, toast } from "./ui";
@@ -782,6 +791,42 @@ function EditPanel({
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
   const [working, setWorking] = useState(false);
+  const [img, setImg] = useState<string | null>(article.image_url);
+  const [imgBusy, setImgBusy] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  function onPickImage(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // чтобы можно было выбрать тот же файл повторно
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      setImgBusy(true);
+      try {
+        const url = await uploadImage(article.id, file.name, String(reader.result));
+        setImg(url);
+        await onChanged();
+      } catch (err) {
+        toast(`Ошибка: ${err instanceof Error ? err.message : String(err)}`, "error");
+      } finally {
+        setImgBusy(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function removeImage() {
+    setImgBusy(true);
+    try {
+      await clearImage(article.id);
+      setImg(null);
+      await onChanged();
+    } catch (err) {
+      toast(`Ошибка: ${err instanceof Error ? err.message : String(err)}`, "error");
+    } finally {
+      setImgBusy(false);
+    }
+  }
 
   async function save() {
     setWorking(true);
@@ -830,6 +875,70 @@ function EditPanel({
       </div>
       <div className="panel">
         <div className="col">
+          <div
+            style={{
+              display: "flex",
+              gap: 10,
+              alignItems: "center",
+              marginBottom: 10,
+            }}
+          >
+            {img ? (
+              <img
+                src={img}
+                alt=""
+                style={{
+                  width: 60,
+                  height: 60,
+                  objectFit: "cover",
+                  borderRadius: 8,
+                  border: "1px solid var(--line)",
+                }}
+              />
+            ) : (
+              <div
+                style={{
+                  width: 60,
+                  height: 60,
+                  borderRadius: 8,
+                  border: "1px dashed var(--line-strong)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 11,
+                  color: "var(--muted)",
+                }}
+              >
+                нет
+              </div>
+            )}
+            <div
+              style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}
+            >
+              <span className="muted" style={{ fontSize: 12 }}>
+                Картинка поста
+              </span>
+              <button
+                className="alink"
+                disabled={imgBusy}
+                onClick={() => fileRef.current?.click()}
+              >
+                {imgBusy ? "загрузка…" : "загрузить"}
+              </button>
+              {img && (
+                <button className="alink" disabled={imgBusy} onClick={removeImage}>
+                  убрать
+                </button>
+              )}
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                style={{ display: "none" }}
+                onChange={onPickImage}
+              />
+            </div>
+          </div>
           <div className="tg-wrap">
             <textarea
               className="tg-edit"

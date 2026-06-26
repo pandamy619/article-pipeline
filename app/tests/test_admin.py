@@ -406,6 +406,43 @@ def test_publish_bad_chat_returns_error_not_500(client, monkeypatch):
     assert "chat not found" in data["error"]
 
 
+def test_image_upload_serve_clear(client, monkeypatch, tmp_path):
+    import base64
+
+    import src.config
+
+    monkeypatch.setattr(src.config.settings, "media_dir", str(tmp_path))
+    monkeypatch.setattr(src.config.settings, "admin_token", "secret")
+    auth = {"Authorization": "Bearer secret"}
+
+    png = base64.b64encode(b"\x89PNG\r\nFAKE").decode()
+    r = client.post(
+        "/api/articles/1/image",
+        json={"filename": "a.png", "data": f"data:image/png;base64,{png}"},
+        headers=auth,
+    )
+    assert r.status_code == 200 and r.json()["ok"] is True
+    url = r.json()["image_url"]
+    assert url.startswith("/api/media/") and url.endswith(".png")
+
+    a1 = next(a for a in client.get("/api/articles", headers=auth).json() if a["id"] == 1)
+    assert a1["image_url"] == url
+
+    # картинку отдаём БЕЗ токена (её грузит <img>), а защищённую ручку — нет
+    fname = url.rsplit("/", 1)[-1]
+    g = client.get(f"/api/media/{fname}")
+    assert g.status_code == 200 and g.content == b"\x89PNG\r\nFAKE"
+    assert client.get("/api/stats").status_code == 401
+
+    assert client.post("/api/articles/1/image/clear", headers=auth).json() == {
+        "ok": True
+    }
+    a1b = next(
+        a for a in client.get("/api/articles", headers=auth).json() if a["id"] == 1
+    )
+    assert a1b["image_url"] is None
+
+
 def test_chat(client, monkeypatch):
     import src.llm.client as llm
 

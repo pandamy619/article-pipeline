@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
+import os
 from datetime import datetime
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy import func, select
 
+from src import media
 from src.channels import service as channels_service
 from src.config import settings
 from src.db.base import get_session
@@ -31,8 +35,13 @@ from src.settings_store import EDITABLE, apply_overrides, current_values, set_ov
 setup_logging()
 
 
-def require_auth(authorization: str | None = Header(default=None)) -> None:
+def require_auth(
+    request: Request, authorization: str | None = Header(default=None)
+) -> None:
     """Защита админки токеном. Пустой ADMIN_TOKEN -> авторизация выключена."""
+    # картинки отдаём без токена: их грузит <img>, который заголовок не шлёт
+    if request.url.path.startswith(media.MEDIA_URL_PREFIX):
+        return
     token = settings.admin_token
     if not token:
         return
@@ -252,6 +261,49 @@ async def publish_article(article_id: int) -> dict[str, object]:
             rec.tg_message_id = message_id
             rec.status = ArticleStatus.published
     return {"ok": True}
+
+
+class ImageIn(BaseModel):
+    filename: str = ""
+    data: str  # base64, можно с префиксом 'data:image/...;base64,'
+
+
+@app.post("/api/articles/{article_id}/image")
+def set_article_image(article_id: int, body: ImageIn) -> dict[str, object]:
+    """Загрузка своей картинки (base64) -> сохраняем в media -> ставим в статью."""
+    raw = body.data.split(",", 1)[-1]
+    try:
+        blob = base64.b64decode(raw, validate=False)
+    except (ValueError, TypeError):
+        return {"ok": False, "error": "не удалось декодировать файл"}
+    if not blob:
+        return {"ok": False, "error": "пустой файл"}
+    if len(blob) > 12 * 1024 * 1024:
+        return {"ok": False, "error": "файл больше 12 МБ"}
+    url = media.save_bytes(blob, filename=body.filename)
+    with get_session() as session:
+        rec = session.get(ArticleRecord, article_id)
+        if not rec:
+            raise HTTPException(status_code=404, detail="not found")
+        rec.image_url = url
+    return {"ok": True, "image_url": url}
+
+
+@app.post("/api/articles/{article_id}/image/clear")
+def clear_article_image(article_id: int) -> dict[str, bool]:
+    with get_session() as session:
+        rec = session.get(ArticleRecord, article_id)
+        if rec:
+            rec.image_url = None
+    return {"ok": True}
+
+
+@app.get("/api/media/{filename}")
+def serve_media(filename: str) -> FileResponse:
+    path = media.media_dir() / os.path.basename(filename)
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="not found")
+    return FileResponse(path)
 
 
 class BulkIn(BaseModel):

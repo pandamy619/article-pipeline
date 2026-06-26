@@ -96,3 +96,26 @@ def test_publish_photo_error_falls_back_to_text():
     bot = PhotoBot(photo_raises=True)
     asyncio.run(publish(bot, "@c", "короткий", image_url="https://i/x.jpg"))
     assert bot.msgs and not bot.photos
+
+
+def test_publish_external_image_sends_url():
+    bot = PhotoBot()
+    asyncio.run(publish(bot, "@c", "пост", image_url="https://i/x.jpg"))
+    assert bot.photos[0][1] == "https://i/x.jpg"  # внешняя — ссылкой
+
+
+def test_publish_local_image_sends_file(monkeypatch, tmp_path):
+    from aiogram.types import FSInputFile
+
+    import src.config
+    from src import media
+
+    monkeypatch.setattr(src.config.settings, "media_dir", str(tmp_path))
+    (tmp_path / "x.jpg").write_bytes(b"img")
+
+    bot = PhotoBot()
+    asyncio.run(
+        publish(bot, "@c", "пост", image_url=media.MEDIA_URL_PREFIX + "x.jpg")
+    )
+    # локальный файл уходит байтами (FSInputFile), а не ссылкой
+    assert isinstance(bot.photos[0][1], FSInputFile)

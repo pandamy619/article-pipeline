@@ -260,6 +260,27 @@ export async function searchArticles(
   return r.json();
 }
 
+export async function uploadImage(
+  id: number,
+  filename: string,
+  dataBase64: string,
+): Promise<string> {
+  const r = await req(`/api/articles/${id}/image`, {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ filename, data: dataBase64 }),
+  });
+  if (!r.ok) throw new Error(`upload: HTTP ${r.status}`);
+  const d = await r.json().catch(() => ({}));
+  if (d.ok === false) throw new Error(d.error || "не удалось загрузить картинку");
+  return d.image_url as string;
+}
+
+export async function clearImage(id: number): Promise<void> {
+  const r = await req(`/api/articles/${id}/image/clear`, { method: "POST" });
+  if (!r.ok) throw new Error(`clear image: HTTP ${r.status}`);
+}
+
 export async function fetchPendingWeb(channel?: number | null): Promise<Article[]> {
   const q = channel != null ? `?channel=${channel}` : "";
   return (await req(`/api/search/pending${q}`)).json();

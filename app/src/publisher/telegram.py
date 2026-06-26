@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Protocol
+from typing import Any, Protocol
+
+from aiogram.types import FSInputFile
+
+from src import media
 
 TELEGRAM_LIMIT = 4096
 CAPTION_LIMIT = 1024  # лимит подписи под фото в Telegram
@@ -10,7 +14,14 @@ CAPTION_LIMIT = 1024  # лимит подписи под фото в Telegram
 
 class Sender(Protocol):
     async def send_message(self, chat_id: int | str, text: str): ...
-    async def send_photo(self, chat_id: int | str, photo: str, caption: str): ...
+    async def send_photo(self, chat_id: int | str, photo: Any, caption: str): ...
+
+
+def _photo_arg(image_url: str) -> Any:
+    """Локальный файл шлём байтами (FSInputFile), внешний — ссылкой."""
+    if media.is_local(image_url):
+        return FSInputFile(str(media.local_path(image_url)))
+    return image_url
 
 
 def resolve_chat_id(value: int | str) -> int | str:
@@ -54,7 +65,7 @@ async def publish(
 
     if image_url and len(text) <= CAPTION_LIMIT:
         try:
-            msg = await bot.send_photo(target, image_url, caption=text)
+            msg = await bot.send_photo(target, _photo_arg(image_url), caption=text)
             return getattr(msg, "message_id", None)
         except Exception:  # noqa: BLE001 — картинка не зашла, шлём текстом
             pass
