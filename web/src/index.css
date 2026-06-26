@@ -464,7 +464,7 @@ table.tbl {
   display: flex;
   gap: 18px;
   flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: stretch; /* чат тянется по высоте поста (голубого блока) */
 }
 .col {
   flex: 1 1 380px;
@@ -586,7 +586,6 @@ table.tbl {
 .chat-log {
   flex: 1;
   min-height: 180px;
-  max-height: 320px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;

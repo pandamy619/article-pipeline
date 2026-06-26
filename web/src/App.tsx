@@ -865,13 +865,37 @@ function EditPanel({
 
   return (
     <div>
-      <div className="toolbar">
-        <button className="btn" onClick={onPreview}>
-          Превью
-        </button>
-        <button className="btn btn-primary" disabled={working} onClick={save}>
-          Сохранить
-        </button>
+      <div className="toolbar" style={{ justifyContent: "space-between" }}>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button className="btn" onClick={onPreview}>
+            Превью
+          </button>
+          <button className="btn btn-primary" disabled={working} onClick={save}>
+            Сохранить
+          </button>
+        </div>
+        <div className="tg-imgbar" style={{ marginTop: 0 }}>
+          <span className="muted">Картинка:</span>
+          <button
+            className="alink"
+            disabled={imgBusy}
+            onClick={() => fileRef.current?.click()}
+          >
+            {imgBusy ? "загрузка…" : img ? "заменить" : "загрузить"}
+          </button>
+          {img && (
+            <button className="alink" disabled={imgBusy} onClick={removeImage}>
+              убрать
+            </button>
+          )}
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            style={{ display: "none" }}
+            onChange={onPickImage}
+          />
+        </div>
       </div>
       <div className="panel">
         <div className="col">
@@ -882,28 +906,6 @@ function EditPanel({
                 className="tg-compose-text"
                 value={text}
                 onChange={(e) => setText(e.target.value)}
-              />
-            </div>
-            <div className="tg-imgbar">
-              <span className="muted">Картинка поста:</span>
-              <button
-                className="alink"
-                disabled={imgBusy}
-                onClick={() => fileRef.current?.click()}
-              >
-                {imgBusy ? "загрузка…" : img ? "заменить" : "загрузить"}
-              </button>
-              {img && (
-                <button className="alink" disabled={imgBusy} onClick={removeImage}>
-                  убрать
-                </button>
-              )}
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/*"
-                style={{ display: "none" }}
-                onChange={onPickImage}
               />
             </div>
           </div>
