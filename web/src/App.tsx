@@ -84,6 +84,47 @@ const VIEW_TITLES: Record<View, string> = {
   settings: "Настройки",
 };
 
+const COLLECT_STAGES: [string, string][] = [
+  ["collect", "Сбор"],
+  ["dedup", "Дедуп"],
+  ["filter", "Фильтр"],
+  ["rewrite", "Рерайт"],
+];
+
+function CollectSteps({
+  progress,
+}: {
+  progress: { stage: string; done: number; total: number };
+}) {
+  const finished = progress.stage === "done";
+  const active = COLLECT_STAGES.findIndex(([k]) => k === progress.stage);
+  const label = COLLECT_STAGES.find(([k]) => k === progress.stage)?.[1];
+  return (
+    <div className="csteps" title="прогресс сбора">
+      <div className="seg">
+        {COLLECT_STAGES.map(([k], i) => (
+          <span
+            key={k}
+            className={`d${
+              finished || (active >= 0 && i < active)
+                ? " done"
+                : active === i
+                  ? " act"
+                  : ""
+            }`}
+          />
+        ))}
+      </div>
+      <span className="lbl">
+        {finished ? "Готово" : (label ?? "Сбор")}
+        {!finished && progress.total > 0
+          ? ` · ${progress.done}/${progress.total}`
+          : ""}
+      </span>
+    </div>
+  );
+}
+
 type SortKey = "id" | "status" | "score" | "source";
 type Sort = { key: SortKey; dir: "asc" | "desc" };
 
@@ -352,16 +393,20 @@ export default function App() {
                 обновляю…
               </span>
             )}
-            {collectNote && (
-              <span
-                className="muted"
-                style={{
-                  fontSize: 13,
-                  color: collectJob?.status === "error" ? "#c02626" : undefined,
-                }}
-              >
-                {collectNote}
-              </span>
+            {collecting && collectJob?.progress ? (
+              <CollectSteps progress={collectJob.progress} />
+            ) : (
+              collectNote && (
+                <span
+                  className="muted"
+                  style={{
+                    fontSize: 13,
+                    color: collectJob?.status === "error" ? "#c02626" : undefined,
+                  }}
+                >
+                  {collectNote}
+                </span>
+              )
             )}
           </div>
           {view !== "search" && (

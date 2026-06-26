@@ -371,6 +371,12 @@ async def _drain_collect_jobs() -> None:
     if job_id is None:
         return
 
+    def _set_progress(stage: str, done: int, total: int) -> None:
+        with get_session() as ps:
+            j = ps.get(CollectJob, job_id)
+            if j:
+                j.progress = json.dumps({"stage": stage, "done": done, "total": total})
+
     def _process() -> tuple[int | None, dict]:
         from src.settings_store import apply_overrides
 
@@ -389,9 +395,13 @@ async def _drain_collect_jobs() -> None:
                 ch = get_channel(session, channel_id)
                 if not ch:
                     raise RuntimeError(f"проект #{channel_id} не найден")
-                res = run_pipeline(session, OllamaClient(), ch)
+                res = run_pipeline(
+                    session, OllamaClient(), ch, on_progress=_set_progress
+                )
             else:
-                res = run_all_channels(session, OllamaClient())
+                res = run_all_channels(
+                    session, OllamaClient(), on_progress=_set_progress
+                )
             return channel_id, {
                 "collected": res.collected,
                 "added": res.added,

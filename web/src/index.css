@@ -729,6 +729,43 @@ table.tbl {
   color: var(--muted);
 }
 
+/* ── прогресс сбора (степпер) ───────────── */
+.csteps {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.csteps .seg {
+  display: flex;
+  gap: 4px;
+}
+.csteps .d {
+  width: 18px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--line-strong);
+}
+.csteps .d.done {
+  background: var(--accent);
+}
+.csteps .d.act {
+  background: var(--accent);
+  animation: cpulse 1s ease-in-out infinite;
+}
+@keyframes cpulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+.csteps .lbl {
+  font-size: 13px;
+  color: var(--muted);
+}
+
 /* ── toasts + modal ────────────────────── */
 .toast-wrap {
   position: fixed;

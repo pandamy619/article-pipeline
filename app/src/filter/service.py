@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from sqlalchemy import select
@@ -26,6 +27,7 @@ def apply_relevance_filter(
     topic: str | None = None,
     threshold: int | None = None,
     channel_id: int | None = None,
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> FilterResult:
     """Оценивает все статьи со статусом new и проставляет filtered/rejected."""
     t = settings.relevance_threshold if threshold is None else threshold
@@ -34,9 +36,12 @@ def apply_relevance_filter(
         stmt = stmt.where(ArticleRecord.channel_id == channel_id)
     records = session.scalars(stmt).all()
 
+    total = len(records)
+    if on_progress:
+        on_progress(0, total)
     filtered = 0
     rejected = 0
-    for rec in records:
+    for i, rec in enumerate(records, 1):
         art = Article(
             title=rec.title,
             url=rec.url,
@@ -53,6 +58,8 @@ def apply_relevance_filter(
         else:
             rec.status = ArticleStatus.rejected
             rejected += 1
+        if on_progress:
+            on_progress(i, total)
 
     session.flush()
     return FilterResult(filtered=filtered, rejected=rejected)

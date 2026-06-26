@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from sqlalchemy import select
@@ -23,6 +24,7 @@ def apply_rewrite(
     *,
     channel_id: int | None = None,
     limit: int | None = None,
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> RewriteResult:
     """Генерит пост для каждой статьи filtered и переводит её в drafted."""
     stmt = select(ArticleRecord).where(ArticleRecord.status == ArticleStatus.filtered)
@@ -32,8 +34,11 @@ def apply_rewrite(
         stmt = stmt.limit(limit)
     records = session.scalars(stmt).all()
 
+    total = len(records)
+    if on_progress:
+        on_progress(0, total)
     drafted = 0
-    for rec in records:
+    for i, rec in enumerate(records, 1):
         art = Article(
             title=rec.title,
             url=rec.url,
@@ -44,6 +49,8 @@ def apply_rewrite(
         rec.post_text = generate_post(art, client=client)
         rec.status = ArticleStatus.drafted
         drafted += 1
+        if on_progress:
+            on_progress(i, total)
 
     session.flush()
     return RewriteResult(drafted=drafted)

@@ -173,6 +173,7 @@ class CollectJob(Base):
     )
     result: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON-сводка
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    progress: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON: этап+счётчик
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, index=True
     )

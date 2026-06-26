@@ -61,6 +61,7 @@ export interface CollectJob {
   query: string | null; // задан => веб-поиск
   status: "queued" | "running" | "done" | "error";
   result: Record<string, number | string[]> | null;
+  progress: { stage: string; done: number; total: number } | null;
   error: string | null;
   created_at: string;
   started_at: string | null;

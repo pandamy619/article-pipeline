@@ -455,6 +455,26 @@ def test_image_upload_serve_and_save_flow(client, monkeypatch, tmp_path):
     assert img1() is None
 
 
+def test_collect_status_returns_progress(client):
+    import json
+
+    from src.db.models import CollectJob, CollectJobStatus
+
+    s = db_base.SessionLocal()
+    j = CollectJob(
+        channel_id=None,
+        status=CollectJobStatus.running,
+        progress=json.dumps({"stage": "filter", "done": 2, "total": 5}),
+    )
+    s.add(j)
+    s.commit()
+    jid = j.id
+    s.close()
+
+    r = client.get(f"/api/collect/status/{jid}").json()
+    assert r["progress"] == {"stage": "filter", "done": 2, "total": 5}
+
+
 def test_images_search_endpoint_wired(client):
     # без ключей/SearXNG возвращает пустой список, но ручка отвечает корректно
     r = client.get("/api/images/search?q=python&source=web")

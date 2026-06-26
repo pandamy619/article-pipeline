@@ -67,6 +67,25 @@ def test_run_pipeline_dedup_on_second_run(session):
     assert result.drafted == 0
 
 
+def test_run_pipeline_reports_progress(session):
+    ch = _channel(session)
+    events: list[tuple[str, int, int]] = []
+    run_pipeline(
+        session,
+        FakeLLM(),
+        ch,
+        collector=fake_collector,
+        on_progress=lambda s, d, t: events.append((s, d, t)),
+    )
+    stages = [e[0] for e in events]
+    assert stages[0] == "collect"
+    assert "filter" in stages and "rewrite" in stages
+    assert stages[-1] == "done"
+    # по-статейный счётчик фильтра доходит до total (2/2)
+    filt = [e for e in events if e[0] == "filter"]
+    assert (2, 2) in [(e[1], e[2]) for e in filt]
+
+
 def test_run_pipeline_writes_run_log(session):
     ch = _channel(session)
     run_pipeline(session, FakeLLM(), ch, collector=fake_collector)

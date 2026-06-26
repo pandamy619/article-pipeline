@@ -755,6 +755,7 @@ class CollectJobOut(BaseModel):
     query: str | None = None  # задан => веб-поиск
     status: str
     result: dict[str, object] | None = None  # сбор: счётчики; веб-поиск: added+queries
+    progress: dict[str, object] | None = None  # текущий этап + счётчик статей
     error: str | None = None
     created_at: datetime
     started_at: datetime | None = None
@@ -768,6 +769,7 @@ def _job_out(job: CollectJob) -> CollectJobOut:
         query=job.query,
         status=job.status.value,
         result=json.loads(job.result) if job.result else None,
+        progress=json.loads(job.progress) if job.progress else None,
         error=job.error,
         created_at=job.created_at,
         started_at=job.started_at,

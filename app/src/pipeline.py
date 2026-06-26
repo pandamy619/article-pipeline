@@ -36,8 +36,15 @@ def run_pipeline(
     channel: Channel,
     *,
     collector: Callable[[Channel], list[Article]] | None = None,
+    on_progress: Callable[[str, int, int], None] | None = None,
 ) -> PipelineResult:
     """Полный прогон одного канала: сбор -> дедуп -> фильтр -> рерайт в черновики."""
+
+    def _p(stage: str, done: int = 0, total: int = 0) -> None:
+        if on_progress:
+            on_progress(stage, done, total)
+
+    _p("collect")
     if collector is None:
         articles = collect_for_channel(channel)
     else:
@@ -47,6 +54,7 @@ def run_pipeline(
 
     saved = save_articles(session, articles, channel_id=channel.id)
     if settings.semantic_dedup_enabled:
+        _p("dedup")
         deduped = apply_semantic_dedup(session, llm_client, channel_id=channel.id)
     else:
         deduped = DedupResult(checked=0, duplicates=0)
@@ -56,8 +64,15 @@ def run_pipeline(
         topic=channel.topic,
         threshold=channel.relevance_threshold,
         channel_id=channel.id,
+        on_progress=lambda d, t: _p("filter", d, t),
     )
-    rewritten = apply_rewrite(session, llm_client, channel_id=channel.id)
+    rewritten = apply_rewrite(
+        session,
+        llm_client,
+        channel_id=channel.id,
+        on_progress=lambda d, t: _p("rewrite", d, t),
+    )
+    _p("done")
 
     result = PipelineResult(
         collected=len(articles),
@@ -84,14 +99,19 @@ def run_pipeline(
     return result
 
 
-def run_all_channels(session: Session, llm_client: Scorer) -> PipelineResult:
+def run_all_channels(
+    session: Session,
+    llm_client: Scorer,
+    *,
+    on_progress: Callable[[str, int, int], None] | None = None,
+) -> PipelineResult:
     """Прогоняет все включённые каналы, возвращает суммарный результат."""
     ensure_default_channel(session)
     total = PipelineResult(0, 0, 0, 0, 0, 0, 0)
     for channel in list_channels(session):
         if not channel.enabled:
             continue
-        r = run_pipeline(session, llm_client, channel)
+        r = run_pipeline(session, llm_client, channel, on_progress=on_progress)
         total = PipelineResult(
             collected=total.collected + r.collected,
             added=total.added + r.added,

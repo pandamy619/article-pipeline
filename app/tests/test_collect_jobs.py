@@ -30,7 +30,7 @@ def test_drain_marks_job_done(memdb, monkeypatch):
     monkeypatch.setattr(
         bot,
         "run_all_channels",
-        lambda session, client: PipelineResult(3, 2, 1, 0, 1, 0, 1),
+        lambda session, client, on_progress=None: PipelineResult(3, 2, 1, 0, 1, 0, 1),
     )
 
     async def _noop() -> int:
@@ -58,7 +58,7 @@ def test_drain_marks_job_error(memdb, monkeypatch):
 
     monkeypatch.setattr(bot, "OllamaClient", lambda *a, **k: object())
 
-    def _boom(session, client):
+    def _boom(session, client, on_progress=None):
         raise RuntimeError("LLM недоступен")
 
     monkeypatch.setattr(bot, "run_all_channels", _boom)
