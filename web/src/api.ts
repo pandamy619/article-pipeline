@@ -163,11 +163,15 @@ export async function collectActive(): Promise<CollectJob[]> {
   return r.json();
 }
 
-export async function savePost(id: number, text: string): Promise<void> {
+export async function savePost(
+  id: number,
+  text: string,
+  imageUrl: string | null,
+): Promise<void> {
   const r = await req(`/api/articles/${id}/post`, {
     method: "POST",
     headers: JSON_HEADERS,
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({ text, image_url: imageUrl }),
   });
   if (!r.ok) throw new Error(`save: HTTP ${r.status}`);
 }
@@ -260,12 +264,11 @@ export async function searchArticles(
   return r.json();
 }
 
-export async function uploadImage(
-  id: number,
+export async function uploadFile(
   filename: string,
   dataBase64: string,
 ): Promise<string> {
-  const r = await req(`/api/articles/${id}/image`, {
+  const r = await req("/api/upload", {
     method: "POST",
     headers: JSON_HEADERS,
     body: JSON.stringify({ filename, data: dataBase64 }),
@@ -273,12 +276,7 @@ export async function uploadImage(
   if (!r.ok) throw new Error(`upload: HTTP ${r.status}`);
   const d = await r.json().catch(() => ({}));
   if (d.ok === false) throw new Error(d.error || "не удалось загрузить картинку");
-  return d.image_url as string;
-}
-
-export async function clearImage(id: number): Promise<void> {
-  const r = await req(`/api/articles/${id}/image/clear`, { method: "POST" });
-  if (!r.ok) throw new Error(`clear image: HTTP ${r.status}`);
+  return d.url as string;
 }
 
 export async function fetchPendingWeb(channel?: number | null): Promise<Article[]> {

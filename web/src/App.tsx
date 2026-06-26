@@ -14,7 +14,6 @@ import {
   type ChatMsg,
   chatArticle,
   checkAuth,
-  clearImage,
   clearToken,
   collect,
   collectActive,
@@ -39,7 +38,7 @@ import {
   setToken,
   unscheduleArticle,
   updateChannel,
-  uploadImage,
+  uploadFile,
 } from "./api";
 import type { Article, Channel, CollectJob, Feed, LastRun, Stats } from "./types";
 import { confirmDialog, toast } from "./ui";
@@ -791,8 +790,9 @@ function EditPanel({
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
   const [working, setWorking] = useState(false);
+  // картинка — черновик: правки видны сразу, но на сервер уходят только при «Сохранить»
   const [img, setImg] = useState<string | null>(article.image_url);
-  const [imgBusy, setImgBusy] = useState(false);
+  const [pendingName, setPendingName] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   function onPickImage(e: ChangeEvent<HTMLInputElement>) {
@@ -800,38 +800,29 @@ function EditPanel({
     e.target.value = ""; // чтобы можно было выбрать тот же файл повторно
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = async () => {
-      setImgBusy(true);
-      try {
-        const url = await uploadImage(article.id, file.name, String(reader.result));
-        setImg(url);
-        await onChanged();
-      } catch (err) {
-        toast(`Ошибка: ${err instanceof Error ? err.message : String(err)}`, "error");
-      } finally {
-        setImgBusy(false);
-      }
+    reader.onload = () => {
+      setImg(String(reader.result)); // data:URL — превью без загрузки на сервер
+      setPendingName(file.name); // загрузим при сохранении
     };
     reader.readAsDataURL(file);
   }
 
-  async function removeImage() {
-    setImgBusy(true);
-    try {
-      await clearImage(article.id);
-      setImg(null);
-      await onChanged();
-    } catch (err) {
-      toast(`Ошибка: ${err instanceof Error ? err.message : String(err)}`, "error");
-    } finally {
-      setImgBusy(false);
-    }
+  function removeImage() {
+    setImg(null);
+    setPendingName(null);
   }
 
   async function save() {
     setWorking(true);
     try {
-      await savePost(article.id, text);
+      let url = img;
+      // новый файл (data:URL) заливаем в media только сейчас, при сохранении
+      if (pendingName && img && img.startsWith("data:")) {
+        url = await uploadFile(pendingName, img);
+        setImg(url);
+        setPendingName(null);
+      }
+      await savePost(article.id, text, url);
       await onChanged();
     } catch (e) {
       toast(`Ошибка: ${e instanceof Error ? e.message : String(e)}`, "error");
@@ -841,14 +832,18 @@ function EditPanel({
   }
 
   async function cancel() {
-    const original = article.post_text ?? "";
+    const origText = article.post_text ?? "";
+    const dirty = text !== origText || img !== article.image_url;
     if (
-      text !== original &&
-      !(await confirmDialog("Отменить несохранённые изменения текста?", "Отменить"))
+      dirty &&
+      !(await confirmDialog("Отменить несохранённые изменения?", "Отменить"))
     ) {
       return;
     }
-    setText(original); // откат к последнему сохранённому
+    // полный откат к исходному виду: и текст, и картинка (вернётся даже убранная)
+    setText(origText);
+    setImg(article.image_url);
+    setPendingName(null);
     onPreview();
   }
 
@@ -898,14 +893,14 @@ function EditPanel({
                   <div className="tg-photo-ctl">
                     <button
                       className="tg-photo-btn"
-                      disabled={imgBusy}
+                      disabled={working}
                       onClick={() => fileRef.current?.click()}
                     >
-                      {imgBusy ? "…" : "заменить"}
+                      заменить
                     </button>
                     <button
                       className="tg-photo-btn"
-                      disabled={imgBusy}
+                      disabled={working}
                       onClick={removeImage}
                     >
                       убрать
@@ -924,10 +919,10 @@ function EditPanel({
                 <span className="muted">Картинки нет.</span>
                 <button
                   className="alink"
-                  disabled={imgBusy}
+                  disabled={working}
                   onClick={() => fileRef.current?.click()}
                 >
-                  {imgBusy ? "загрузка…" : "загрузить"}
+                  загрузить
                 </button>
               </div>
             )}

@@ -263,14 +263,16 @@ async def publish_article(article_id: int) -> dict[str, object]:
     return {"ok": True}
 
 
-class ImageIn(BaseModel):
+class UploadIn(BaseModel):
     filename: str = ""
     data: str  # base64, можно с префиксом 'data:image/...;base64,'
 
 
-@app.post("/api/articles/{article_id}/image")
-def set_article_image(article_id: int, body: ImageIn) -> dict[str, object]:
-    """Загрузка своей картинки (base64) -> сохраняем в media -> ставим в статью."""
+@app.post("/api/upload")
+def upload_media(body: UploadIn) -> dict[str, object]:
+    """Кладёт файл в media и возвращает его url. Статью НЕ трогает — её картинка
+    проставится только при сохранении поста (до этого правки картинки — черновик).
+    """
     raw = body.data.split(",", 1)[-1]
     try:
         blob = base64.b64decode(raw, validate=False)
@@ -280,22 +282,7 @@ def set_article_image(article_id: int, body: ImageIn) -> dict[str, object]:
         return {"ok": False, "error": "пустой файл"}
     if len(blob) > 12 * 1024 * 1024:
         return {"ok": False, "error": "файл больше 12 МБ"}
-    url = media.save_bytes(blob, filename=body.filename)
-    with get_session() as session:
-        rec = session.get(ArticleRecord, article_id)
-        if not rec:
-            raise HTTPException(status_code=404, detail="not found")
-        rec.image_url = url
-    return {"ok": True, "image_url": url}
-
-
-@app.post("/api/articles/{article_id}/image/clear")
-def clear_article_image(article_id: int) -> dict[str, bool]:
-    with get_session() as session:
-        rec = session.get(ArticleRecord, article_id)
-        if rec:
-            rec.image_url = None
-    return {"ok": True}
+    return {"ok": True, "url": media.save_bytes(blob, filename=body.filename)}
 
 
 @app.get("/api/media/{filename}")
@@ -369,6 +356,7 @@ async def bulk_action(body: BulkIn) -> dict[str, object]:
 
 class PostUpdate(BaseModel):
     text: str
+    image_url: str | None = None  # ставится только если ключ явно передан
 
 
 class ReviseIn(BaseModel):
@@ -384,6 +372,9 @@ def save_post(article_id: int, body: PostUpdate) -> dict[str, bool]:
         rec = session.get(ArticleRecord, article_id)
         if rec:
             rec.post_text = body.text
+            # картинку трогаем только если ключ передан (редактор шлёт всегда)
+            if "image_url" in body.model_fields_set:
+                rec.image_url = body.image_url
     return {"ok": True}
 
 

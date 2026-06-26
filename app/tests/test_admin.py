@@ -406,7 +406,7 @@ def test_publish_bad_chat_returns_error_not_500(client, monkeypatch):
     assert "chat not found" in data["error"]
 
 
-def test_image_upload_serve_clear(client, monkeypatch, tmp_path):
+def test_image_upload_serve_and_save_flow(client, monkeypatch, tmp_path):
     import base64
 
     import src.config
@@ -415,32 +415,44 @@ def test_image_upload_serve_clear(client, monkeypatch, tmp_path):
     monkeypatch.setattr(src.config.settings, "admin_token", "secret")
     auth = {"Authorization": "Bearer secret"}
 
+    def img1():
+        return next(
+            a for a in client.get("/api/articles", headers=auth).json() if a["id"] == 1
+        )["image_url"]
+
     png = base64.b64encode(b"\x89PNG\r\nFAKE").decode()
+    # 1) загрузка файла — статью НЕ трогает (правка картинки = черновик)
     r = client.post(
-        "/api/articles/1/image",
+        "/api/upload",
         json={"filename": "a.png", "data": f"data:image/png;base64,{png}"},
         headers=auth,
     )
     assert r.status_code == 200 and r.json()["ok"] is True
-    url = r.json()["image_url"]
+    url = r.json()["url"]
     assert url.startswith("/api/media/") and url.endswith(".png")
+    assert img1() is None  # пока пост не сохранён — картинки у статьи нет
 
-    a1 = next(a for a in client.get("/api/articles", headers=auth).json() if a["id"] == 1)
-    assert a1["image_url"] == url
-
-    # картинку отдаём БЕЗ токена (её грузит <img>), а защищённую ручку — нет
+    # 2) картинку отдаём без токена, а защищённую ручку — нет
     fname = url.rsplit("/", 1)[-1]
     g = client.get(f"/api/media/{fname}")
     assert g.status_code == 200 and g.content == b"\x89PNG\r\nFAKE"
     assert client.get("/api/stats").status_code == 401
 
-    assert client.post("/api/articles/1/image/clear", headers=auth).json() == {
-        "ok": True
-    }
-    a1b = next(
-        a for a in client.get("/api/articles", headers=auth).json() if a["id"] == 1
+    # 3) сохранение поста с картинкой -> ставится на статью
+    client.post(
+        "/api/articles/1/post", json={"text": "пост", "image_url": url}, headers=auth
     )
-    assert a1b["image_url"] is None
+    assert img1() == url
+
+    # 4) сохранение без ключа image_url -> картинка не трогается
+    client.post("/api/articles/1/post", json={"text": "пост2"}, headers=auth)
+    assert img1() == url
+
+    # 5) сохранение с image_url=null -> картинка убрана
+    client.post(
+        "/api/articles/1/post", json={"text": "пост3", "image_url": None}, headers=auth
+    )
+    assert img1() is None
 
 
 def test_chat(client, monkeypatch):
