@@ -875,55 +875,23 @@ function EditPanel({
       </div>
       <div className="panel">
         <div className="col">
-          <div
-            style={{
-              display: "flex",
-              gap: 10,
-              alignItems: "center",
-              marginBottom: 10,
-            }}
-          >
-            {img ? (
-              <img
-                src={img}
-                alt=""
-                style={{
-                  width: 60,
-                  height: 60,
-                  objectFit: "cover",
-                  borderRadius: 8,
-                  border: "1px solid var(--line)",
-                }}
+          <div className="tg-wrap">
+            <div className="tg-compose">
+              {img && <img className="tg-photo" src={img} alt="" />}
+              <textarea
+                className="tg-compose-text"
+                value={text}
+                onChange={(e) => setText(e.target.value)}
               />
-            ) : (
-              <div
-                style={{
-                  width: 60,
-                  height: 60,
-                  borderRadius: 8,
-                  border: "1px dashed var(--line-strong)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: 11,
-                  color: "var(--muted)",
-                }}
-              >
-                нет
-              </div>
-            )}
-            <div
-              style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}
-            >
-              <span className="muted" style={{ fontSize: 12 }}>
-                Картинка поста
-              </span>
+            </div>
+            <div className="tg-imgbar">
+              <span className="muted">Картинка поста:</span>
               <button
                 className="alink"
                 disabled={imgBusy}
                 onClick={() => fileRef.current?.click()}
               >
-                {imgBusy ? "загрузка…" : "загрузить"}
+                {imgBusy ? "загрузка…" : img ? "заменить" : "загрузить"}
               </button>
               {img && (
                 <button className="alink" disabled={imgBusy} onClick={removeImage}>
@@ -938,13 +906,6 @@ function EditPanel({
                 onChange={onPickImage}
               />
             </div>
-          </div>
-          <div className="tg-wrap">
-            <textarea
-              className="tg-edit"
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-            />
           </div>
         </div>
 

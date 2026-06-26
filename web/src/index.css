@@ -518,6 +518,44 @@ table.tbl {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
+/* редактор-«пузырь»: картинка сверху + редактируемый текст, как в превью */
+.tg-compose {
+  background: #fff;
+  max-width: 480px;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 1.5px rgba(0, 0, 0, 0.12);
+}
+.tg-compose .tg-photo {
+  display: block;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  border-radius: 0;
+}
+.tg-compose-text {
+  display: block;
+  width: 100%;
+  min-height: 200px;
+  border: none;
+  background: transparent;
+  padding: 9px 13px;
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.46;
+  resize: vertical;
+}
+.tg-compose-text:focus {
+  outline: none;
+}
+.tg-imgbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  font-size: 12px;
+}
 .tg-link {
   color: #2481cc;
   text-decoration: none;
