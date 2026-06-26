@@ -865,49 +865,64 @@ function EditPanel({
 
   return (
     <div>
-      <div className="toolbar" style={{ justifyContent: "space-between" }}>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button className="btn" onClick={onPreview}>
-            Превью
-          </button>
-          <button className="btn btn-primary" disabled={working} onClick={save}>
-            Сохранить
-          </button>
-        </div>
-        <div className="tg-imgbar" style={{ marginTop: 0 }}>
-          <span className="muted">Картинка:</span>
-          <button
-            className="alink"
-            disabled={imgBusy}
-            onClick={() => fileRef.current?.click()}
-          >
-            {imgBusy ? "загрузка…" : img ? "заменить" : "загрузить"}
-          </button>
-          {img && (
-            <button className="alink" disabled={imgBusy} onClick={removeImage}>
-              убрать
-            </button>
-          )}
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            style={{ display: "none" }}
-            onChange={onPickImage}
-          />
-        </div>
+      <div className="toolbar">
+        <button className="btn" onClick={onPreview}>
+          Превью
+        </button>
+        <button className="btn btn-primary" disabled={working} onClick={save}>
+          Сохранить
+        </button>
       </div>
       <div className="panel">
         <div className="col">
           <div className="tg-wrap">
             <div className="tg-compose">
-              {img && <img className="tg-photo" src={img} alt="" />}
+              {img && (
+                <div className="tg-photo-wrap">
+                  <img className="tg-photo" src={img} alt="" />
+                  <div className="tg-photo-ctl">
+                    <button
+                      className="tg-photo-btn"
+                      disabled={imgBusy}
+                      onClick={() => fileRef.current?.click()}
+                    >
+                      {imgBusy ? "…" : "заменить"}
+                    </button>
+                    <button
+                      className="tg-photo-btn"
+                      disabled={imgBusy}
+                      onClick={removeImage}
+                    >
+                      убрать
+                    </button>
+                  </div>
+                </div>
+              )}
               <textarea
                 className="tg-compose-text"
                 value={text}
                 onChange={(e) => setText(e.target.value)}
               />
             </div>
+            {!img && (
+              <div className="tg-imgbar">
+                <span className="muted">Картинки нет.</span>
+                <button
+                  className="alink"
+                  disabled={imgBusy}
+                  onClick={() => fileRef.current?.click()}
+                >
+                  {imgBusy ? "загрузка…" : "загрузить"}
+                </button>
+              </div>
+            )}
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              style={{ display: "none" }}
+              onChange={onPickImage}
+            />
           </div>
         </div>
 

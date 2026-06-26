@@ -533,6 +533,33 @@ table.tbl {
   margin: 0;
   border-radius: 0;
 }
+.tg-photo-wrap {
+  position: relative;
+}
+.tg-photo-ctl {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 6px;
+}
+.tg-photo-btn {
+  appearance: none;
+  border: none;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.tg-photo-btn:hover {
+  background: rgba(0, 0, 0, 0.74);
+}
+.tg-photo-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
 .tg-compose-text {
   display: block;
   width: 100%;
